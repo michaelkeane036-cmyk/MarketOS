@@ -89,6 +89,34 @@ button {
   padding: 1.35rem 1rem 7.3rem;
 }
 
+.today-dashboard,
+.workspace-screen {
+  height: 100dvh;
+  min-height: 100dvh;
+  max-height: 100dvh;
+  overflow: hidden;
+}
+
+.today-dashboard {
+  display: flex;
+  flex-direction: column;
+  padding: 1.12rem 1rem 6.55rem;
+}
+
+.today-content {
+  min-height: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.workspace-screen {
+  display: flex;
+  flex-direction: column;
+  padding: 1.15rem 1rem 6.75rem;
+}
+
 .mock-header,
 .date-line,
 .header-actions,
@@ -107,7 +135,14 @@ button {
 .auth-safety-pill,
 .brand-row,
 .setup-note,
-.evidence-actions {
+.evidence-actions,
+.today-alert-card,
+.workspace-header,
+.summary-band,
+.workspace-actions,
+.account-line,
+.account-safety,
+.logout-button {
   display: flex;
   align-items: center;
 }
@@ -695,6 +730,348 @@ button {
   color: currentColor;
 }
 
+.today-dashboard .bottom-nav,
+.workspace-screen .bottom-nav {
+  position: absolute;
+  left: 1rem;
+  right: 1rem;
+  bottom: max(0.65rem, env(safe-area-inset-bottom));
+  width: auto;
+  transform: none;
+}
+
+.today-dashboard .mock-header {
+  flex-shrink: 0;
+  margin-bottom: 0.48rem;
+}
+
+.today-dashboard .mock-header h1 {
+  margin-bottom: 0.72rem;
+  font-size: 1.82rem;
+}
+
+.today-dashboard .business-switcher {
+  font-size: 1.36rem;
+}
+
+.today-dashboard .date-line {
+  margin-top: 0.38rem;
+  font-size: 0.82rem;
+}
+
+.today-dashboard .round-icon-button {
+  width: 2.95rem;
+  height: 2.95rem;
+}
+
+.today-dashboard .exact-pill {
+  flex-shrink: 0;
+  margin: -0.18rem 0 0.78rem auto;
+  padding: 0.58rem 0.82rem;
+  font-size: 0.78rem;
+}
+
+.today-dashboard .pulse-section h2 {
+  margin-bottom: 0.58rem;
+  font-size: 1.22rem;
+}
+
+.today-dashboard .exact-metrics-grid {
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+
+.today-dashboard .metric-card {
+  min-height: 7.1rem;
+  padding: 0.54rem 0.42rem;
+}
+
+.today-dashboard .metric-icon {
+  width: 1.78rem;
+  height: 1.78rem;
+  margin-bottom: 0.42rem;
+}
+
+.today-dashboard .metric-card strong {
+  margin: 0.2rem 0 0.28rem;
+  font-size: clamp(0.95rem, 3.85vw, 1.1rem);
+}
+
+.today-dashboard .metric-label,
+.today-dashboard .metric-detail,
+.today-dashboard .metric-card b {
+  font-size: 0.66rem;
+}
+
+.today-dashboard .quick-record-card {
+  flex-shrink: 0;
+  margin-bottom: 0.72rem;
+  padding: 0.78rem;
+}
+
+.today-dashboard .quick-title {
+  margin-bottom: 0.58rem;
+}
+
+.today-dashboard .quick-title strong {
+  font-size: 0.95rem;
+}
+
+.today-dashboard .record-input,
+.today-dashboard .review-button {
+  min-height: 2.8rem;
+}
+
+.today-dashboard .quick-record-card p {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.today-dashboard .exact-actions {
+  flex-shrink: 0;
+  gap: 0.55rem;
+  margin-bottom: 0.72rem;
+}
+
+.today-dashboard .action-tile {
+  min-height: 5.15rem;
+  gap: 0.35rem;
+}
+
+.today-dashboard .action-tile svg {
+  width: 1.85rem;
+  height: 1.85rem;
+}
+
+.today-dashboard .action-tile strong {
+  font-size: 0.75rem;
+}
+
+.today-alert-strip {
+  flex-shrink: 0;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+
+.today-alert-card {
+  min-width: 0;
+  min-height: 4.35rem;
+  align-items: flex-start;
+  gap: 0.36rem;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 0.88rem;
+  padding: 0.62rem 0.48rem;
+  color: #f7f7f5;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025)),
+    rgba(6, 12, 13, 0.66);
+  text-align: left;
+}
+
+.today-alert-card > svg:first-child {
+  flex: 0 0 auto;
+}
+
+.today-alert-card > svg:last-child {
+  align-self: center;
+  margin-left: auto;
+  color: #a5a7aa;
+}
+
+.today-alert-card span {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 0.14rem;
+  color: #aeb3b3;
+  font-size: 0.66rem;
+  line-height: 1.2;
+}
+
+.today-alert-card strong {
+  color: #fff;
+  font-size: 0.76rem;
+  line-height: 1.12;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.today-alert-card.tone-green {
+  border-color: rgba(75, 217, 143, 0.2);
+}
+
+.today-alert-card.tone-green > svg:first-child {
+  color: #4bd98f;
+}
+
+.today-alert-card.tone-amber {
+  border-color: rgba(255, 193, 74, 0.22);
+}
+
+.today-alert-card.tone-amber > svg:first-child {
+  color: #ffc14a;
+}
+
+.today-alert-card.tone-coral {
+  border-color: rgba(255, 117, 105, 0.22);
+}
+
+.today-alert-card.tone-coral > svg:first-child {
+  color: #ff7569;
+}
+
+.workspace-header {
+  flex-shrink: 0;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.workspace-header span {
+  color: #8ff0b8;
+  font-size: 0.8rem;
+  font-weight: 850;
+}
+
+.workspace-header h1 {
+  margin: 0.2rem 0 0;
+  color: #fff;
+  font-size: 2.2rem;
+  line-height: 1;
+  letter-spacing: 0;
+  font-weight: 900;
+}
+
+.workspace-stack {
+  min-height: 0;
+  flex: 1;
+  display: grid;
+  align-content: start;
+  gap: 0.85rem;
+  overflow-y: auto;
+  padding-bottom: 0.75rem;
+  scrollbar-width: none;
+}
+
+.workspace-stack::-webkit-scrollbar {
+  display: none;
+}
+
+.summary-band {
+  gap: 0.85rem;
+  padding: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  border-radius: 1rem;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025)),
+    rgba(6, 12, 13, 0.66);
+}
+
+.summary-band > span {
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+
+.summary-band.tone-green > span {
+  color: #4bd98f;
+  background: rgba(75, 217, 143, 0.16);
+}
+
+.summary-band.tone-amber > span {
+  color: #ffc14a;
+  background: rgba(255, 193, 74, 0.15);
+}
+
+.summary-band.tone-coral > span {
+  color: #ff7569;
+  background: rgba(255, 117, 105, 0.15);
+}
+
+.summary-band strong {
+  display: block;
+  color: #fff;
+  font-size: 1.4rem;
+  line-height: 1.05;
+  font-weight: 900;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-band p {
+  margin: 0.34rem 0 0;
+  color: #b8bbbd;
+  font-size: 0.84rem;
+}
+
+.workspace-actions {
+  gap: 0.7rem;
+}
+
+.workspace-actions .primary-action,
+.workspace-actions .upload-button {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+  font-size: 0.84rem;
+}
+
+.workspace-panel {
+  padding-bottom: 0.75rem;
+}
+
+.workspace-warning {
+  margin-bottom: 0;
+}
+
+.account-card {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.account-line {
+  justify-content: space-between;
+  gap: 1rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.account-line span {
+  color: #b8bbbd;
+  font-size: 0.78rem;
+}
+
+.account-line strong {
+  min-width: 0;
+  color: #fff;
+  font-size: 0.9rem;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.account-safety {
+  align-items: flex-start;
+  gap: 0.55rem;
+  color: #b7f3ce;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.logout-button {
+  min-height: 3rem;
+  justify-content: center;
+  gap: 0.55rem;
+  border: 1px solid rgba(255, 117, 105, 0.28);
+  border-radius: 0.85rem;
+  color: #ff8b7f;
+  background: rgba(255, 117, 105, 0.08);
+  font-weight: 850;
+}
+
 .auth-screen,
 .setup-screen,
 .record-screen,
@@ -1106,11 +1483,26 @@ button {
     border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 0 36px 110px rgba(0, 0, 0, 0.45);
   }
+
+  .today-dashboard,
+  .workspace-screen {
+    height: min(900px, calc(100dvh - 4rem));
+    min-height: min(900px, calc(100dvh - 4rem));
+    max-height: min(900px, calc(100dvh - 4rem));
+  }
 }
 
 @media (max-width: 410px) {
   .exact-dashboard {
     padding: 1.2rem 0.82rem 7.3rem;
+  }
+
+  .today-dashboard {
+    padding: 1rem 0.82rem 6.45rem;
+  }
+
+  .workspace-screen {
+    padding: 1rem 0.82rem 6.6rem;
   }
 
   .round-icon-button {
@@ -1136,8 +1528,17 @@ button {
     padding: 0.58rem 0.44rem;
   }
 
+  .today-dashboard .metric-card {
+    min-height: 6.8rem;
+    padding: 0.48rem 0.36rem;
+  }
+
   .metric-card strong {
     font-size: 1rem;
+  }
+
+  .today-dashboard .metric-card strong {
+    font-size: 0.9rem;
   }
 
   .metric-label,
@@ -1146,12 +1547,52 @@ button {
     font-size: 0.68rem;
   }
 
+  .today-dashboard .metric-label,
+  .today-dashboard .metric-detail,
+  .today-dashboard .metric-card b {
+    font-size: 0.62rem;
+  }
+
   .quick-record-row {
     display: grid;
   }
 
   .review-button {
     width: 100%;
+  }
+
+  .today-dashboard .quick-record-row {
+    display: flex;
+  }
+
+  .today-dashboard .review-button {
+    width: auto;
+    padding-inline: 0.62rem;
+  }
+
+  .today-dashboard .quick-record-card {
+    padding: 0.68rem;
+  }
+
+  .today-dashboard .action-tile {
+    min-height: 4.8rem;
+  }
+
+  .today-alert-strip {
+    gap: 0.38rem;
+  }
+
+  .today-alert-card {
+    min-height: 4.05rem;
+    padding: 0.55rem 0.42rem;
+  }
+
+  .today-alert-card span {
+    font-size: 0.6rem;
+  }
+
+  .today-alert-card strong {
+    font-size: 0.68rem;
   }
 
   .business-panels {

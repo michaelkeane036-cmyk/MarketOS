@@ -5,6 +5,8 @@ import DashboardScreen from './screens/DashboardScreen'
 import RecordEntryScreen from './screens/RecordEntryScreen'
 import ReviewScreen from './screens/ReviewScreen'
 import ScanScreen from './screens/ScanScreen'
+import WorkspaceScreen, { type WorkspaceView } from './screens/WorkspaceScreen'
+import type { MainTab } from './components/AppBottomNav'
 import { hasSupabaseConfig, supabase } from './lib/supabase'
 import {
   applyLocalRecord,
@@ -16,7 +18,7 @@ import { business, defaultReviewDraft, emptyRecords, initialRecords } from './da
 import { buildDashboardModel, cloneRecords } from './utils/records'
 import type { AuthMode, AuthSession, BusinessSetupDraft, CapturedImage, RecordKind, ReviewEntryDraft, ScanDraft } from './types'
 
-type AppView = 'dashboard' | 'scan' | 'review' | 'record'
+type AppView = MainTab | WorkspaceView | 'scan' | 'review' | 'record'
 
 const demoSession: AuthSession = {
   provider: 'demo',
@@ -30,7 +32,7 @@ const demoSession: AuthSession = {
 export default function App() {
   const [authMode, setAuthMode] = useState<AuthMode>('login')
   const [session, setSession] = useState<AuthSession | null>(null)
-  const [view, setView] = useState<AppView>('dashboard')
+  const [view, setView] = useState<AppView>('today')
   const [businessProfile, setBusinessProfile] = useState(business)
   const [records, setRecords] = useState(() => cloneRecords(initialRecords))
   const [recordType, setRecordType] = useState<RecordKind>('sale')
@@ -124,7 +126,7 @@ export default function App() {
 
   const startDemoSession = (message: string) => {
     setSession(demoSession)
-    setView('dashboard')
+    setView('today')
     setAuthMessage(message)
   }
 
@@ -162,7 +164,7 @@ export default function App() {
             email: user.email || email
           }
         })
-        setView('dashboard')
+        setView('today')
       } else {
         setAuthMessage('Check your email to confirm this account.')
       }
@@ -201,7 +203,7 @@ export default function App() {
   const handleLogout = async () => {
     if (supabase) await supabase.auth.signOut()
     setSession(null)
-    setView('dashboard')
+    setView('today')
     setScanDraft(null)
   }
 
@@ -219,7 +221,7 @@ export default function App() {
           })
         }
         setRecords(workspace.records)
-        setView('dashboard')
+        setView('today')
       } catch (error) {
         setAuthMessage(`Could not create business workspace: ${messageFromError(error)}`)
       } finally {
@@ -237,7 +239,7 @@ export default function App() {
       currency: setup.currency,
       setupComplete: true
     }))
-    setView('dashboard')
+    setView('today')
   }
 
   const handleStartRecord = (type: RecordKind) => {
@@ -272,7 +274,7 @@ export default function App() {
     }
 
     setScanDraft(null)
-    setView('dashboard')
+    setView('today')
   }
 
   const handleCapture = (image: CapturedImage) => {
@@ -320,7 +322,7 @@ export default function App() {
     return (
       <RecordEntryScreen
         type={recordType}
-        onBack={() => setView('dashboard')}
+        onBack={() => setView('today')}
         onScan={() => setView('scan')}
         onSave={(entry) => {
           if (!isSavingRecord) void handleSaveRecord(entry, 'manual')
@@ -330,7 +332,7 @@ export default function App() {
   }
 
   if (view === 'scan') {
-    return <ScanScreen onBack={() => setView('dashboard')} onCapture={handleCapture} />
+    return <ScanScreen onBack={() => setView('today')} onCapture={handleCapture} />
   }
 
   if (view === 'review' && scanDraft) {
@@ -345,19 +347,47 @@ export default function App() {
     )
   }
 
+  if (view === 'review') {
+    return <ScanScreen onBack={() => setView('today')} onCapture={handleCapture} />
+  }
+
+  if (view !== 'today') {
+    return (
+      <WorkspaceScreen
+        authMessage={authMessage}
+        business={businessProfile}
+        debtRecords={dashboard.debtRecords}
+        draftCount={dashboard.draftCount}
+        estimatedProfit={dashboard.estimatedProfit}
+        expenses={records.expenses}
+        ownerWithdrawalTotal={dashboard.ownerWithdrawalTotal}
+        products={records.products}
+        recentRecords={dashboard.recentRecords}
+        sales={records.sales}
+        session={session}
+        stockAlerts={dashboard.stockAlerts}
+        stockMovements={records.stockMovements}
+        view={view}
+        onLogout={handleLogout}
+        onNavigate={setView}
+        onScan={() => setView('scan')}
+        onStartRecord={handleStartRecord}
+      />
+    )
+  }
+
   return (
     <DashboardScreen
-      authMessage={authMessage}
       business={businessProfile}
       metrics={dashboard.metrics}
       debtRecords={dashboard.debtRecords}
       stockAlerts={dashboard.stockAlerts}
-      recentRecords={dashboard.recentRecords}
       ownerWithdrawalTotal={dashboard.ownerWithdrawalTotal}
       estimatedProfit={dashboard.estimatedProfit}
       draftCount={dashboard.draftCount}
-      session={session}
-      onLogout={handleLogout}
+      onAccount={() => setView('account')}
+      onNavigate={setView}
+      onNotifications={() => setView('notifications')}
       onStartRecord={handleStartRecord}
       onScan={() => setView('scan')}
     />
