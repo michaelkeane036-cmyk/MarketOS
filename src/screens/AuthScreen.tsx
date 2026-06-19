@@ -1,10 +1,12 @@
 import { FormEvent, useState } from 'react'
 import { ArrowRight, BadgeCheck, Eye, EyeOff, LockKeyhole, Mail, ShieldCheck } from 'lucide-react'
+import InstallPrompt from '../components/InstallPrompt'
 import type { AuthMode } from '../types'
 
 interface AuthScreenProps {
   authMode: AuthMode
   isBusy: boolean
+  isGoogleBusy: boolean
   isPreviewAuth: boolean
   message: string
   onEmailAuth: (email: string, password: string, name?: string) => Promise<void>
@@ -16,6 +18,7 @@ interface AuthScreenProps {
 export default function AuthScreen({
   authMode,
   isBusy,
+  isGoogleBusy,
   isPreviewAuth,
   message,
   onEmailAuth,
@@ -110,9 +113,9 @@ export default function AuthScreen({
             </button>
           </form>
 
-          <button className="google-button" type="button" onClick={() => void onGoogleAuth()}>
+          <button className="google-button" disabled={isBusy || isGoogleBusy} type="button" onClick={() => void onGoogleAuth()}>
             <span>G</span>
-            Continue with Google
+            {isGoogleBusy ? 'Opening Google...' : 'Continue with Google'}
           </button>
 
           <button className="reset-button" type="button" onClick={() => void onPasswordReset(email)}>
@@ -125,6 +128,7 @@ export default function AuthScreen({
             </p>
           )}
         </section>
+        <InstallPrompt />
       </main>
     </div>
   )

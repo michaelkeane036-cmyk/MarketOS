@@ -57,11 +57,23 @@ export default function App() {
   const [scanDraft, setScanDraft] = useState<ScanDraft | null>(null)
   const [authMessage, setAuthMessage] = useState('')
   const [isAuthBusy, setIsAuthBusy] = useState(false)
+  const [isGoogleBusy, setIsGoogleBusy] = useState(false)
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false)
   const [isSavingRecord, setIsSavingRecord] = useState(false)
 
   const isPreviewAuth = useMemo(() => !hasSupabaseConfig, [])
   const dashboard = useMemo(() => buildDashboardModel(records), [records])
+
+  useEffect(() => {
+    const search = new URLSearchParams(window.location.search)
+    const hash = new URLSearchParams(window.location.hash.replace(/^#/, ''))
+    const oauthError = search.get('error_description') || hash.get('error_description') || search.get('error') || hash.get('error')
+
+    if (oauthError) {
+      setAuthMessage(`Google sign-in failed: ${oauthError}`)
+      setIsGoogleBusy(false)
+    }
+  }, [])
 
   useEffect(() => {
     if (!supabase) return undefined
@@ -70,6 +82,7 @@ export default function App() {
       const user = data.session?.user
       if (!user) return
 
+      setIsGoogleBusy(false)
       setSession({
         provider: 'supabase',
         user: {
@@ -83,10 +96,12 @@ export default function App() {
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       const user = nextSession?.user
       if (!user) {
+        setIsGoogleBusy(false)
         setSession(null)
         return
       }
 
+      setIsGoogleBusy(false)
       setSession({
         provider: 'supabase',
         user: {
@@ -193,14 +208,27 @@ export default function App() {
 
   const handleGoogleAuth = async () => {
     setAuthMessage('')
+    setIsGoogleBusy(true)
 
     if (!supabase) {
-      startDemoSession('Demo mode: Google sign-in will connect when Supabase is configured.')
+      setIsGoogleBusy(false)
+      setAuthMessage('Google sign-in is not connected yet. Add Supabase env vars and enable Google in Supabase Auth.')
       return
     }
 
-    const { error } = await supabase.auth.signInWithOAuth({ provider: 'google' })
-    if (error) setAuthMessage(error.message)
+    setAuthMessage('Opening Google sign-in...')
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: window.location.origin
+      }
+    })
+
+    if (error) {
+      setIsGoogleBusy(false)
+      setAuthMessage(error.message)
+    }
   }
 
   const handlePasswordReset = async (email: string) => {
@@ -407,6 +435,7 @@ export default function App() {
       <AuthScreen
         authMode={authMode}
         isBusy={isAuthBusy}
+        isGoogleBusy={isGoogleBusy}
         isPreviewAuth={isPreviewAuth}
         message={authMessage}
         onEmailAuth={handleEmailAuth}

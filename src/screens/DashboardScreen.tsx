@@ -15,6 +15,7 @@ import {
 } from 'lucide-react'
 import ActionButton from '../components/ActionButton'
 import AppBottomNav, { type MainTab } from '../components/AppBottomNav'
+import InstallPrompt from '../components/InstallPrompt'
 import MetricCard from '../components/MetricCard'
 import { quickRecordExample } from '../data/mockData'
 import { formatNaira } from '../utils/format'
@@ -160,6 +161,7 @@ export default function DashboardScreen({
         </div>
 
         <AppBottomNav active="today" onNavigate={onNavigate} />
+        <InstallPrompt surface="floating" />
       </main>
     </div>
   )

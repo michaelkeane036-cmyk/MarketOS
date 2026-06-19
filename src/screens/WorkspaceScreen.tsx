@@ -21,6 +21,7 @@ import {
 import type { LucideIcon } from 'lucide-react'
 import { FormEvent, ReactNode, useMemo, useState } from 'react'
 import AppBottomNav, { type MainTab } from '../components/AppBottomNav'
+import InstallPrompt from '../components/InstallPrompt'
 import StatusRow from '../components/StatusRow'
 import { formatNaira } from '../utils/format'
 import { buildCustomerLedger, buildDailyCloseout, buildWhatsAppCloseoutText } from '../utils/businessInsights'
@@ -388,6 +389,7 @@ export default function WorkspaceScreen({
                 Log out
               </button>
             </section>
+            <InstallPrompt />
           </section>
         )}
 

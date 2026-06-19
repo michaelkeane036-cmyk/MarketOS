@@ -13,11 +13,21 @@
   -webkit-font-smoothing: antialiased;
 }
 
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 body {
+  position: fixed;
+  inset: 0;
   margin: 0;
   min-width: 320px;
-  min-height: 100vh;
-  overflow-x: hidden;
+  min-height: 100%;
   background:
     radial-gradient(circle at top, rgba(255, 255, 255, 0.85), transparent 24rem),
     #e9e4da;
@@ -33,10 +43,20 @@ button {
   cursor: pointer;
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
 .app-shell {
-  min-height: 100vh;
+  width: 100%;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
   display: flex;
   justify-content: center;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .dashboard,
@@ -47,9 +67,12 @@ button {
 .review-screen {
   width: 100%;
   max-width: 430px;
-  min-height: 100vh;
+  height: 100dvh;
+  max-height: 100dvh;
+  min-height: 0;
   position: relative;
-  overflow-x: hidden;
+  overflow: hidden;
+  overscroll-behavior: contain;
   background:
     radial-gradient(circle at 12% 5%, rgba(39, 152, 98, 0.16), transparent 15rem),
     radial-gradient(circle at 100% 22%, rgba(255, 196, 95, 0.12), transparent 14rem),
@@ -92,8 +115,8 @@ button {
 .today-dashboard,
 .workspace-screen {
   height: 100dvh;
-  min-height: 100dvh;
   max-height: 100dvh;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -965,8 +988,10 @@ button {
   align-content: start;
   gap: 0.85rem;
   overflow-y: auto;
+  overscroll-behavior: contain;
   padding-bottom: 0.75rem;
   scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .workspace-stack::-webkit-scrollbar {
@@ -1391,6 +1416,18 @@ button {
 .scan-screen,
 .review-screen {
   padding: 1.1rem 1rem 2rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.auth-screen::-webkit-scrollbar,
+.setup-screen::-webkit-scrollbar,
+.record-screen::-webkit-scrollbar,
+.scan-screen::-webkit-scrollbar,
+.review-screen::-webkit-scrollbar {
+  display: none;
 }
 
 .auth-shell {
@@ -1402,7 +1439,8 @@ button {
   flex-direction: column;
   justify-content: center;
   gap: 1rem;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   background:
     linear-gradient(180deg, rgba(3, 7, 9, 0.55), rgba(3, 7, 9, 0.91) 52%, rgba(3, 7, 9, 0.96)),
     url("./assets/auth-marketos-shop.png") center / cover no-repeat,
@@ -1649,6 +1687,127 @@ button {
   line-height: 1.45;
 }
 
+.install-card {
+  display: flex;
+  align-items: center;
+  gap: 0.68rem;
+  min-width: 0;
+  border: 1px solid rgba(75, 217, 143, 0.2);
+  border-radius: 1rem;
+  padding: 0.78rem;
+  color: #f8f8f5;
+  background:
+    linear-gradient(145deg, rgba(75, 217, 143, 0.11), rgba(255, 255, 255, 0.035)),
+    rgba(4, 9, 10, 0.84);
+  box-shadow: inset 0 0 24px rgba(75, 217, 143, 0.04);
+}
+
+.install-card-card {
+  margin-top: 0.75rem;
+}
+
+.install-icon {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 0.82rem;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: #4bd98f;
+  background: rgba(75, 217, 143, 0.14);
+}
+
+.install-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.install-copy strong {
+  display: block;
+  color: #fff;
+  font-size: 0.84rem;
+  line-height: 1.2;
+  font-weight: 900;
+}
+
+.install-copy p {
+  margin: 0.18rem 0 0;
+  color: #bfc4c3;
+  font-size: 0.72rem;
+  line-height: 1.35;
+}
+
+.install-action,
+.install-hint,
+.install-dismiss {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+
+.install-action {
+  min-height: 2.35rem;
+  gap: 0.35rem;
+  border: 0;
+  border-radius: 0.72rem;
+  padding: 0 0.72rem;
+  color: #07150d;
+  background: #71e4a4;
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.install-hint {
+  gap: 0.28rem;
+  color: #8ff0b8;
+  font-size: 0.72rem;
+  font-weight: 850;
+}
+
+.install-dismiss {
+  width: 2rem;
+  height: 2rem;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 50%;
+  color: #aeb3b3;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.install-card-floating {
+  position: absolute;
+  z-index: 19;
+  left: 1rem;
+  right: 1rem;
+  bottom: calc(max(0.65rem, env(safe-area-inset-bottom)) + 5.95rem);
+  padding: 0.56rem 0.62rem;
+  border-radius: 0.95rem;
+  background:
+    linear-gradient(145deg, rgba(75, 217, 143, 0.13), rgba(255, 255, 255, 0.04)),
+    rgba(4, 9, 10, 0.91);
+  backdrop-filter: blur(18px);
+}
+
+.install-card-floating .install-icon {
+  width: 2.1rem;
+  height: 2.1rem;
+}
+
+.install-card-floating .install-copy p,
+.install-card-floating .install-hint {
+  display: none;
+}
+
+.install-card-floating .install-action {
+  min-height: 2.05rem;
+  padding-inline: 0.62rem;
+}
+
+.install-card-floating .install-dismiss {
+  width: 1.85rem;
+  height: 1.85rem;
+}
+
 .setup-form,
 .record-form {
   display: grid;
@@ -1791,7 +1950,9 @@ button {
   .record-screen,
   .scan-screen,
   .review-screen {
-    min-height: 900px;
+    height: min(900px, calc(100dvh - 4rem));
+    max-height: min(900px, calc(100dvh - 4rem));
+    min-height: 0;
     border-radius: 2rem;
     border: 1px solid rgba(255, 255, 255, 0.12);
     box-shadow: 0 36px 110px rgba(0, 0, 0, 0.45);
@@ -1800,8 +1961,8 @@ button {
   .today-dashboard,
   .workspace-screen {
     height: min(900px, calc(100dvh - 4rem));
-    min-height: min(900px, calc(100dvh - 4rem));
     max-height: min(900px, calc(100dvh - 4rem));
+    min-height: 0;
   }
 }
 
@@ -1906,6 +2067,25 @@ button {
 
   .today-alert-card strong {
     font-size: 0.68rem;
+  }
+
+  .install-card {
+    gap: 0.5rem;
+    padding: 0.62rem;
+  }
+
+  .install-copy strong {
+    font-size: 0.76rem;
+  }
+
+  .install-copy p {
+    font-size: 0.66rem;
+  }
+
+  .install-card-floating {
+    left: 0.82rem;
+    right: 0.82rem;
+    bottom: calc(max(0.65rem, env(safe-area-inset-bottom)) + 5.75rem);
   }
 
   .business-panels {
