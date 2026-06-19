@@ -1643,7 +1643,6 @@ button:disabled {
   margin-top: 0.35rem;
 }
 
-.google-button,
 .reset-button,
 .upload-button {
   width: 100%;
@@ -1656,22 +1655,11 @@ button:disabled {
   margin-top: 0.7rem;
 }
 
-.google-button,
 .upload-button {
   border: 1px solid rgba(255, 255, 255, 0.13);
   color: #fff;
   background: rgba(255, 255, 255, 0.055);
   font-weight: 850;
-}
-
-.google-button span {
-  width: 1.55rem;
-  height: 1.55rem;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  color: #111;
-  background: #fff;
 }
 
 .reset-button {

@@ -6,11 +6,9 @@ import type { AuthMode } from '../types'
 interface AuthScreenProps {
   authMode: AuthMode
   isBusy: boolean
-  isGoogleBusy: boolean
   isPreviewAuth: boolean
   message: string
   onEmailAuth: (email: string, password: string, name?: string) => Promise<void>
-  onGoogleAuth: () => Promise<void>
   onModeChange: (mode: AuthMode) => void
   onPasswordReset: (email: string) => Promise<void>
 }
@@ -18,11 +16,9 @@ interface AuthScreenProps {
 export default function AuthScreen({
   authMode,
   isBusy,
-  isGoogleBusy,
   isPreviewAuth,
   message,
   onEmailAuth,
-  onGoogleAuth,
   onModeChange,
   onPasswordReset
 }: AuthScreenProps) {
@@ -112,11 +108,6 @@ export default function AuthScreen({
               <ArrowRight size={18} />
             </button>
           </form>
-
-          <button className="google-button" disabled={isBusy || isGoogleBusy} type="button" onClick={() => void onGoogleAuth()}>
-            <span>G</span>
-            {isGoogleBusy ? 'Opening Google...' : 'Continue with Google'}
-          </button>
 
           <button className="reset-button" type="button" onClick={() => void onPasswordReset(email)}>
             Forgot password?
