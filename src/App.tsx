@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import AuthScreen from './screens/AuthScreen'
 import BusinessSetupScreen from './screens/BusinessSetupScreen'
 import DashboardScreen from './screens/DashboardScreen'
+import EmailVerifiedScreen from './screens/EmailVerifiedScreen'
 import RecordEntryScreen from './screens/RecordEntryScreen'
 import ReviewScreen from './screens/ReviewScreen'
 import ScanScreen from './screens/ScanScreen'
@@ -57,12 +58,13 @@ export default function App() {
   const [scanDraft, setScanDraft] = useState<ScanDraft | null>(null)
   const [authMessage, setAuthMessage] = useState('')
   const [confirmationEmail, setConfirmationEmail] = useState('')
+  const [emailVerifiedPending, setEmailVerifiedPending] = useState(() => detectEmailVerificationReturn())
   const [isAuthBusy, setIsAuthBusy] = useState(false)
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false)
   const [isSavingRecord, setIsSavingRecord] = useState(false)
 
   const isPreviewAuth = useMemo(() => !hasSupabaseConfig, [])
-  const dashboard = useMemo(() => buildDashboardModel(records), [records])
+  const dashboard = useMemo(() => buildDashboardModel(records, businessProfile.currency), [businessProfile.currency, records])
 
   useEffect(() => {
     if (!supabase) return undefined
@@ -120,6 +122,7 @@ export default function App() {
             ownerName: session.user.name || workspace.business.ownerName
           })
           setRecords(workspace.records)
+          if (workspace.business.setupComplete) setEmailVerifiedPending(false)
         } else {
           setBusinessProfile({
             ...business,
@@ -292,6 +295,7 @@ export default function App() {
     setSession(null)
     setView('today')
     setScanDraft(null)
+    setEmailVerifiedPending(false)
   }
 
   const handleSetupComplete = async (setup: BusinessSetupDraft) => {
@@ -308,6 +312,7 @@ export default function App() {
           })
         }
         setRecords(workspace.records)
+        setEmailVerifiedPending(false)
         setView('today')
       } catch (error) {
         setAuthMessage(`Could not create business workspace: ${messageFromError(error)}`)
@@ -323,9 +328,13 @@ export default function App() {
       businessType: setup.businessType || current.businessType,
       ownerName: setup.ownerName || current.ownerName,
       location: setup.location || current.location,
+      address: setup.address || current.address,
+      country: setup.country,
+      stateRegion: setup.stateRegion,
       currency: setup.currency,
       setupComplete: true
     }))
+    setEmailVerifiedPending(false)
     setView('today')
   }
 
@@ -507,6 +516,10 @@ export default function App() {
   }
 
   if (!businessProfile.setupComplete) {
+    if (emailVerifiedPending) {
+      return <EmailVerifiedScreen session={session} onContinue={() => setEmailVerifiedPending(false)} />
+    }
+
     return <BusinessSetupScreen business={businessProfile} session={session} onComplete={handleSetupComplete} />
   }
 
@@ -664,4 +677,12 @@ function createDraftForReview(type: RecordKind): ReviewEntryDraft {
     evidence: undefined,
     scanDraftId: undefined
   }
+}
+
+function detectEmailVerificationReturn() {
+  const rawParams = `${window.location.search}&${window.location.hash.replace(/^#/, '')}`
+  const params = new URLSearchParams(rawParams)
+  const type = params.get('type')
+
+  return type === 'signup' || type === 'email_change' || Boolean(params.get('access_token') || params.get('token_hash') || params.get('code'))
 }

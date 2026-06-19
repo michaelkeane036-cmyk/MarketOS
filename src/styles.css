@@ -1653,6 +1653,11 @@ button:not(:disabled):active,
   appearance: none;
 }
 
+.field option {
+  color: #08130e;
+  background: #f8f8f5;
+}
+
 .field textarea {
   min-height: 5rem;
   resize: vertical;
@@ -1922,6 +1927,72 @@ button:not(:disabled):active,
   background: rgba(75, 217, 143, 0.08);
   font-size: 0.78rem;
   line-height: 1.45;
+}
+
+.suggestion-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.42rem;
+  margin: -0.28rem 0 0.82rem;
+}
+
+.suggestion-grid button {
+  min-height: 2.15rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 0 0.72rem;
+  color: #d7dcda;
+  background: rgba(255, 255, 255, 0.055);
+  font-size: 0.72rem;
+  font-weight: 780;
+}
+
+.suggestion-grid button.active {
+  border-color: rgba(75, 217, 143, 0.35);
+  color: #07150d;
+  background: #71e4a4;
+}
+
+.verified-screen {
+  justify-content: center;
+}
+
+.verified-card {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.verified-icon {
+  width: 3.7rem;
+  height: 3.7rem;
+  border-radius: 1.15rem;
+  display: grid;
+  place-items: center;
+  color: #4bd98f;
+  background: rgba(75, 217, 143, 0.14);
+}
+
+.verified-card > span {
+  color: #8ff0b8;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-weight: 900;
+}
+
+.verified-card h1 {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(2rem, 10vw, 3rem);
+  line-height: 0.98;
+  font-weight: 900;
+}
+
+.verified-card p {
+  margin: 0;
+  color: #c3c7c6;
+  font-size: 0.9rem;
+  line-height: 1.58;
 }
 
 .split-fields {

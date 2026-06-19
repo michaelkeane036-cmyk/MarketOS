@@ -18,7 +18,7 @@ import AppBottomNav, { type MainTab } from '../components/AppBottomNav'
 import InstallPrompt from '../components/InstallPrompt'
 import MetricCard from '../components/MetricCard'
 import { quickRecordExample } from '../data/mockData'
-import { formatNaira } from '../utils/format'
+import { formatCurrency } from '../utils/format'
 import type { BusinessProfile, DashboardMetric, DebtRecord, MetricTone, RecordKind, StockAlert } from '../types'
 
 interface DashboardScreenProps {
@@ -136,7 +136,7 @@ export default function DashboardScreen({
             <button className="today-alert-card tone-coral" type="button" onClick={() => onNavigate('debts')}>
               <UsersRound size={20} />
               <span>
-                <strong>{formatNaira(debtBalance)}</strong>
+                <strong>{formatCurrency(debtBalance, business.currency)}</strong>
                 Customer debts
               </span>
               <ChevronRight size={17} />

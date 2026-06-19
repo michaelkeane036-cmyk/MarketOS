@@ -20,6 +20,9 @@ export const business: BusinessProfile = {
   businessType: 'Neighborhood provisions store',
   ownerName: 'Ayo',
   location: 'Yaba, Lagos',
+  address: 'Yaba market area',
+  country: 'NG',
+  stateRegion: 'Lagos',
   currency: 'NGN',
   operatingNote: 'No wallet - records only',
   setupComplete: false

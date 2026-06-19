@@ -1,4 +1,5 @@
 import { business as defaultBusiness, emptyRecords } from '../data/mockData'
+import { buildLocationSummary } from '../data/businessSetupOptions'
 import { supabase } from './supabase'
 import { applyReviewedRecord, cloneRecords, createDraftForKind, voidLocalRecord } from '../utils/records'
 import { formatTime, parseMoney } from '../utils/format'
@@ -7,6 +8,8 @@ import type {
   BusinessProfile,
   BusinessSetupDraft,
   CapturedImage,
+  CountryCode,
+  CurrencyCode,
   Customer,
   CustomerDraft,
   MarketRecords,
@@ -47,6 +50,9 @@ type BusinessRow = {
   business_type: string
   location: string | null
   currency: string
+  country: string | null
+  state_region: string | null
+  address: string | null
   operating_note: string
   setup_complete: boolean
 }
@@ -222,6 +228,9 @@ export async function createBusinessWorkspace(setup: BusinessSetupDraft, userId:
       name: setup.name,
       business_type: setup.businessType,
       location: setup.location,
+      address: setup.address,
+      country: setup.country,
+      state_region: setup.stateRegion,
       currency: setup.currency,
       operating_note: defaultBusiness.operatingNote,
       setup_complete: true
@@ -550,13 +559,20 @@ async function mapScanDrafts(rows: ScanDraftRow[]): Promise<PersistedScanDraft[]
 }
 
 function mapBusiness(row: BusinessRow): BusinessProfile {
+  const country = normalizeCountry(row.country)
+  const stateRegion = row.state_region ?? ''
+  const address = row.address ?? ''
+
   return {
     id: row.id,
     name: row.name,
     businessType: row.business_type,
     ownerName: defaultBusiness.ownerName,
-    location: row.location ?? '',
-    currency: 'NGN',
+    location: row.location ?? buildLocationSummary(address, stateRegion, country),
+    address,
+    country,
+    stateRegion,
+    currency: normalizeCurrency(row.currency),
     operatingNote: row.operating_note,
     setupComplete: row.setup_complete
   }
@@ -627,6 +643,14 @@ function mapLifecycle(row: LifecycleRow): RecordLifecycle {
     correctedByRecordType: row.corrected_by_record_type ?? undefined,
     correctedByRecordId: row.corrected_by_record_id ?? undefined
   }
+}
+
+function normalizeCurrency(value: string | null | undefined): CurrencyCode {
+  return value === 'USD' || value === 'GBP' || value === 'NGN' ? value : 'NGN'
+}
+
+function normalizeCountry(value: string | null | undefined): CountryCode {
+  return value === 'US' || value === 'GB' || value === 'OTHER' || value === 'NG' ? value : 'NG'
 }
 
 function dataUrlToBlob(dataUrl: string) {

@@ -47,6 +47,9 @@ create table if not exists public.businesses (
   name text not null,
   business_type text not null default 'Small business',
   location text,
+  address text,
+  country text not null default 'NG',
+  state_region text,
   currency text not null default 'NGN',
   operating_note text not null default 'No wallet - records only',
   setup_complete boolean not null default false,
@@ -232,6 +235,9 @@ create table if not exists public.activity_log (
 );
 
 alter table public.customers add column if not exists updated_at timestamptz not null default now();
+alter table public.businesses add column if not exists address text;
+alter table public.businesses add column if not exists country text not null default 'NG';
+alter table public.businesses add column if not exists state_region text;
 alter table public.products add column if not exists updated_at timestamptz not null default now();
 alter table public.transaction_evidence add column if not exists scan_draft_id uuid;
 alter table public.scan_drafts add column if not exists file_name text;

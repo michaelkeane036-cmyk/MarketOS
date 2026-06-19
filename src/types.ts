@@ -8,6 +8,10 @@ export type PaymentMethod = 'cash' | 'transfer' | 'pos' | 'credit'
 
 export type RecordStatus = 'draft' | 'recorded' | 'evidence_attached' | 'customer_confirmed' | 'externally_verified'
 
+export type CurrencyCode = 'NGN' | 'USD' | 'GBP'
+
+export type CountryCode = 'NG' | 'US' | 'GB' | 'OTHER'
+
 export interface AuthUser {
   id: string
   name: string
@@ -26,7 +30,10 @@ export interface BusinessProfile {
   businessType: string
   ownerName: string
   location: string
-  currency: 'NGN'
+  address: string
+  country: CountryCode
+  stateRegion: string
+  currency: CurrencyCode
   operatingNote: string
   setupComplete: boolean
 }
@@ -36,7 +43,10 @@ export interface BusinessSetupDraft {
   businessType: string
   ownerName: string
   location: string
-  currency: 'NGN'
+  address: string
+  country: CountryCode
+  stateRegion: string
+  currency: CurrencyCode
 }
 
 export interface Customer {
@@ -284,6 +294,7 @@ export interface CustomerLedgerEntry {
 
 export interface CustomerLedger {
   customer: Customer
+  currency: CurrencyCode
   totalSales: number
   outstandingBalance: number
   evidenceCount: number
@@ -301,6 +312,7 @@ export interface PaymentBreakdown {
 export interface DailyCloseout {
   businessName: string
   dateLabel: string
+  currency: CurrencyCode
   salesTotal: number
   estimatedProfit: number
   expensesTotal: number

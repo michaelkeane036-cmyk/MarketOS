@@ -1,8 +1,9 @@
 import type { BusinessProfile, Customer, CustomerLedger, DailyCloseout, MarketRecords, PaymentBreakdown } from '../types'
-import { formatNaira } from './format'
+import type { CurrencyCode } from '../types'
+import { formatCurrency } from './format'
 import { statusLabel } from './records'
 
-export function buildCustomerLedger(customer: Customer, records: MarketRecords): CustomerLedger {
+export function buildCustomerLedger(customer: Customer, records: MarketRecords, currency: CurrencyCode = 'NGN'): CustomerLedger {
   const normalizedName = normalize(customer.name)
   const sales = records.sales.filter((sale) => normalize(sale.customerName) === normalizedName)
   const debts = records.debts.filter((debt) => normalize(debt.customerName) === normalizedName || debt.customerId === customer.id)
@@ -41,11 +42,12 @@ export function buildCustomerLedger(customer: Customer, records: MarketRecords):
   const entries = [...saleEntries, ...debtEntries].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
   const reminderText =
     outstandingBalance > 0
-      ? `Hello ${customer.name}, this is a reminder that your outstanding balance with us is ${formatNaira(outstandingBalance)}. Thank you.`
+      ? `Hello ${customer.name}, this is a reminder that your outstanding balance with us is ${formatCurrency(outstandingBalance, currency)}. Thank you.`
       : `Hello ${customer.name}, your balance with us is currently clear. Thank you.`
 
   return {
     customer,
+    currency,
     totalSales,
     outstandingBalance,
     evidenceCount,
@@ -86,6 +88,7 @@ export function buildDailyCloseout(records: MarketRecords, business: BusinessPro
   return {
     businessName: business.name,
     dateLabel: new Intl.DateTimeFormat('en-NG', { dateStyle: 'medium' }).format(date),
+    currency: business.currency,
     salesTotal,
     estimatedProfit,
     expensesTotal,
@@ -100,22 +103,23 @@ export function buildDailyCloseout(records: MarketRecords, business: BusinessPro
 }
 
 export function buildWhatsAppCloseoutText(closeout: DailyCloseout) {
+  const money = (amount: number) => formatCurrency(amount, closeout.currency)
   const lines = [
     `MarketOS Daily Summary - ${closeout.businessName}`,
     closeout.dateLabel,
     '',
-    `Sales: ${formatNaira(closeout.salesTotal)}`,
-    `Estimated profit: ${formatNaira(closeout.estimatedProfit)}`,
-    `Expenses: ${formatNaira(closeout.expensesTotal)}`,
-    `Owner withdrawals: ${formatNaira(closeout.ownerWithdrawalTotal)}`,
-    `Stock added: ${formatNaira(closeout.stockAddedValue)}`,
-    `Debts created: ${formatNaira(closeout.debtsCreated)}`,
+    `Sales: ${money(closeout.salesTotal)}`,
+    `Estimated profit: ${money(closeout.estimatedProfit)}`,
+    `Expenses: ${money(closeout.expensesTotal)}`,
+    `Owner withdrawals: ${money(closeout.ownerWithdrawalTotal)}`,
+    `Stock added: ${money(closeout.stockAddedValue)}`,
+    `Debts created: ${money(closeout.debtsCreated)}`,
     '',
     'Payment breakdown:',
-    `Cash: ${formatNaira(closeout.paymentBreakdown.cash)}`,
-    `Transfer: ${formatNaira(closeout.paymentBreakdown.transfer)}`,
-    `POS: ${formatNaira(closeout.paymentBreakdown.pos)}`,
-    `Credit/customer owes: ${formatNaira(closeout.paymentBreakdown.credit)}`,
+    `Cash: ${money(closeout.paymentBreakdown.cash)}`,
+    `Transfer: ${money(closeout.paymentBreakdown.transfer)}`,
+    `POS: ${money(closeout.paymentBreakdown.pos)}`,
+    `Credit/customer owes: ${money(closeout.paymentBreakdown.credit)}`,
     '',
     `Low stock alerts: ${closeout.lowStockCount}`,
     `Drafts waiting review: ${closeout.draftCount}`

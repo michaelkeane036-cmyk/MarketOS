@@ -1,5 +1,21 @@
+import type { CurrencyCode } from '../types'
+
+const localeByCurrency: Record<CurrencyCode, string> = {
+  NGN: 'en-NG',
+  USD: 'en-US',
+  GBP: 'en-GB'
+}
+
+export function formatCurrency(amount: number, currency: CurrencyCode = 'NGN') {
+  return new Intl.NumberFormat(localeByCurrency[currency], {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: amount % 1 === 0 ? 0 : 2
+  }).format(amount)
+}
+
 export function formatNaira(amount: number) {
-  return `\u20a6${amount.toLocaleString('en-NG')}`
+  return formatCurrency(amount, 'NGN')
 }
 
 export function parseMoney(value: string) {

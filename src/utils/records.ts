@@ -12,7 +12,8 @@ import type {
   StockAlert,
   TransactionEvidence
 } from '../types'
-import { formatNaira, formatTime, parseMoney, parseQuantity } from './format'
+import type { CurrencyCode } from '../types'
+import { formatCurrency, formatTime, parseMoney, parseQuantity } from './format'
 
 export interface DashboardModel {
   metrics: DashboardMetric[]
@@ -120,7 +121,7 @@ export function createDraftForKind(type: RecordKind): ReviewEntryDraft {
   }
 }
 
-export function buildDashboardModel(records: MarketRecords): DashboardModel {
+export function buildDashboardModel(records: MarketRecords, currency: CurrencyCode = 'NGN'): DashboardModel {
   const activeSales = records.sales.filter((sale) => !sale.isVoid)
   const activeDebts = records.debts.filter((debt) => !debt.isVoid)
   const activeExpenses = records.expenses.filter((expense) => !expense.isVoid)
@@ -146,7 +147,7 @@ export function buildDashboardModel(records: MarketRecords): DashboardModel {
     {
       id: 'sales',
       label: 'Sales',
-      value: formatNaira(salesTotal),
+      value: formatCurrency(salesTotal, currency),
       detail: 'saved today',
       trend: `${activeSales.length} records`,
       tone: 'green'
@@ -154,7 +155,7 @@ export function buildDashboardModel(records: MarketRecords): DashboardModel {
     {
       id: 'profit',
       label: 'Profit',
-      value: formatNaira(estimatedProfit),
+      value: formatCurrency(estimatedProfit, currency),
       detail: 'estimated',
       trend: 'reviewed',
       tone: 'green'
@@ -162,7 +163,7 @@ export function buildDashboardModel(records: MarketRecords): DashboardModel {
     {
       id: 'debts',
       label: 'Debts',
-      value: formatNaira(debtsTotal),
+      value: formatCurrency(debtsTotal, currency),
       detail: 'unpaid balance',
       trend: debtsTotal > 0 ? 'follow up' : 'clear',
       tone: debtsTotal > 0 ? 'coral' : 'green'
@@ -181,7 +182,7 @@ export function buildDashboardModel(records: MarketRecords): DashboardModel {
     .slice()
     .sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))
     .slice(0, 4)
-    .map((activity) => toRecentRecord(activity))
+    .map((activity) => toRecentRecord(activity, currency))
 
   return {
     metrics,
@@ -329,14 +330,14 @@ export function applyReviewedRecord(records: MarketRecords, draft: ReviewEntryDr
   return next
 }
 
-function toRecentRecord(activity: ActivityLogEntry): RecentRecord {
+function toRecentRecord(activity: ActivityLogEntry, currency: CurrencyCode): RecentRecord {
   const tone = activity.recordType === 'expense' || activity.recordType === 'debt' ? 'coral' : activity.recordType === 'stock' ? 'amber' : 'green'
   return {
     id: activity.id,
     type: activity.recordType === 'setup' ? 'sale' : activity.recordType,
     title: activity.label,
     meta: statusLabel(activity.status),
-    value: typeof activity.amount === 'number' ? formatNaira(activity.amount) : '',
+    value: typeof activity.amount === 'number' ? formatCurrency(activity.amount, currency) : '',
     tone,
     avatar: activity.recordType.slice(0, 2).toUpperCase(),
     status: activity.status

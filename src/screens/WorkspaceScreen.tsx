@@ -22,7 +22,7 @@ import { FormEvent, ReactNode, useMemo, useState } from 'react'
 import AppBottomNav, { type MainTab } from '../components/AppBottomNav'
 import InstallPrompt from '../components/InstallPrompt'
 import StatusRow from '../components/StatusRow'
-import { formatNaira } from '../utils/format'
+import { formatCurrency } from '../utils/format'
 import { buildCustomerLedger, buildDailyCloseout, buildWhatsAppCloseoutText } from '../utils/businessInsights'
 import { statusLabel } from '../utils/records'
 import { issueMessages, validateCustomerDraft, validateProductDraft } from '../utils/validation'
@@ -127,7 +127,8 @@ export default function WorkspaceScreen({
   const activeScanDrafts = scanDrafts.filter((draft) => draft.status === 'draft')
   const closeout = useMemo(() => buildDailyCloseout(records, business), [business, records])
   const selectedCustomer = selectedCustomerId ? customers.find((customer) => customer.id === selectedCustomerId) : undefined
-  const selectedLedger = selectedCustomer ? buildCustomerLedger(selectedCustomer, records) : null
+  const selectedLedger = selectedCustomer ? buildCustomerLedger(selectedCustomer, records, business.currency) : null
+  const money = (amount: number) => formatCurrency(amount, business.currency)
 
   const handleVoid = () => {
     if (!selectedRecord) return
@@ -172,7 +173,7 @@ export default function WorkspaceScreen({
     }
 
     const debtLines = activeDebts
-      .map((debt) => `${debt.customerName}: ${formatNaira(Math.max(debt.amount - debt.paidAmount, 0))} outstanding`)
+      .map((debt) => `${debt.customerName}: ${money(Math.max(debt.amount - debt.paidAmount, 0))} outstanding`)
       .join('\n')
     const reminderText = `${business.name} debt reminders\n${debtLines}\n\nRecords only. Money stays with your bank/POS/cash drawer.`
 
@@ -195,7 +196,7 @@ export default function WorkspaceScreen({
 
         {view === 'sell' && (
           <section className="workspace-stack">
-            <SummaryBand icon={ShoppingCart} title={formatNaira(activeSales(sales).reduce((total, sale) => total + sale.total, 0))} label={`${activeSales(sales).length} active sale records`} tone="green" />
+            <SummaryBand icon={ShoppingCart} title={money(activeSales(sales).reduce((total, sale) => total + sale.total, 0))} label={`${activeSales(sales).length} active sale records`} tone="green" />
             <div className="workspace-actions">
               <button className="primary-action" type="button" onClick={() => onStartRecord('sale')}>
                 <Plus size={19} />
@@ -227,8 +228,8 @@ export default function WorkspaceScreen({
                     meta={`${sale.customerName} - ${sale.isVoid ? 'Voided' : statusLabel(sale.status)}`}
                     title={sale.items[0]?.name || 'Sale record'}
                     tone={sale.isVoid || sale.balanceOwed ? 'coral' : 'green'}
-                    value={formatNaira(sale.total)}
-                    onClick={() => setSelectedRecord(detailFromSale(sale))}
+                    value={money(sale.total)}
+                    onClick={() => setSelectedRecord(detailFromSale(sale, business.currency))}
                   />
                 ))
               ) : (
@@ -262,8 +263,8 @@ export default function WorkspaceScreen({
                     meta={`${movement.quantity} ${movement.unit} - ${movement.isVoid ? 'Voided' : statusLabel(movement.status)}`}
                     title={movement.productName}
                     tone={movement.isVoid ? 'coral' : 'blue'}
-                    value={formatNaira(movement.quantity * movement.unitCost)}
-                    onClick={() => setSelectedRecord(detailFromStock(movement))}
+                    value={money(movement.quantity * movement.unitCost)}
+                    onClick={() => setSelectedRecord(detailFromStock(movement, business.currency))}
                   />
                 ))
               ) : (
@@ -278,7 +279,7 @@ export default function WorkspaceScreen({
           <section className="workspace-stack">
             <SummaryBand
               icon={UserPlus}
-              title={formatNaira(debtRecords.reduce((total, debt) => total + Math.max(debt.amount - debt.paidAmount, 0), 0))}
+              title={money(debtRecords.reduce((total, debt) => total + Math.max(debt.amount - debt.paidAmount, 0), 0))}
               label={`${debtRecords.length} active customer balances`}
               tone="coral"
             />
@@ -313,8 +314,8 @@ export default function WorkspaceScreen({
                     meta={`${debt.sinceLabel} - ${debt.isVoid ? 'Voided' : statusLabel(debt.status)}`}
                     title={debt.customerName}
                     tone="coral"
-                    value={formatNaira(Math.max(debt.amount - debt.paidAmount, 0))}
-                    onClick={() => setSelectedRecord(detailFromDebt(debt))}
+                    value={money(Math.max(debt.amount - debt.paidAmount, 0))}
+                    onClick={() => setSelectedRecord(detailFromDebt(debt, business.currency))}
                   />
                 ))
               ) : (
@@ -327,7 +328,7 @@ export default function WorkspaceScreen({
 
         {view === 'insights' && (
           <section className="workspace-stack">
-            <SummaryBand icon={TrendingUp} title={formatNaira(estimatedProfit)} label="Estimated profit from active records" tone="green" />
+            <SummaryBand icon={TrendingUp} title={money(estimatedProfit)} label="Estimated profit from active records" tone="green" />
             <section className="spending-warning workspace-warning">
               <span className="warning-icon">
                 <WalletCards size={34} />
@@ -337,7 +338,7 @@ export default function WorkspaceScreen({
                 <h3>Spending Watch</h3>
                 <strong>{ownerWithdrawalTotal > estimatedProfit ? "Withdrawals are above today's profit." : "Spending is within today's profit."}</strong>
                 <p>
-                  Withdrawn: {formatNaira(ownerWithdrawalTotal)} - Profit: {formatNaira(estimatedProfit)}
+                  Withdrawn: {money(ownerWithdrawalTotal)} - Profit: {money(estimatedProfit)}
                 </p>
               </div>
               <ChevronRight size={24} />
@@ -352,8 +353,8 @@ export default function WorkspaceScreen({
                     meta={`${expense.category} - ${expense.isVoid ? 'Voided' : statusLabel(expense.status)}`}
                     title={expense.label}
                     tone="coral"
-                    value={formatNaira(expense.amount)}
-                    onClick={() => setSelectedRecord(detailFromExpense(expense))}
+                    value={money(expense.amount)}
+                    onClick={() => setSelectedRecord(detailFromExpense(expense, business.currency))}
                   />
                 ))
               ) : (
@@ -398,7 +399,7 @@ export default function WorkspaceScreen({
 
         {view === 'account' && (
           <section className="workspace-stack">
-            <SummaryBand icon={CircleUserRound} title={business.name} label={`${business.businessType} - ${business.location}`} tone="green" />
+            <SummaryBand icon={CircleUserRound} title={business.name} label={`${business.businessType} - ${business.location || business.stateRegion}`} tone="green" />
             <section className="panel-card exact-card account-card">
               <div className="account-line">
                 <span>Signed in</span>
@@ -633,6 +634,8 @@ function CustomerLedgerPanel({
   onRecordDebt: () => void
   onRecordSale: () => void
 }) {
+  const money = (amount: number) => formatCurrency(amount, ledger.currency)
+
   return (
     <section className="panel-card exact-card ledger-card">
       <div className="panel-topline">
@@ -643,11 +646,11 @@ function CustomerLedgerPanel({
       </div>
       <div className="ledger-metrics">
         <span>
-          <b>{formatNaira(ledger.outstandingBalance)}</b>
+          <b>{money(ledger.outstandingBalance)}</b>
           Outstanding
         </span>
         <span>
-          <b>{formatNaira(ledger.totalSales)}</b>
+          <b>{money(ledger.totalSales)}</b>
           Sales
         </span>
         <span>
@@ -675,7 +678,7 @@ function CustomerLedgerPanel({
           ledger.entries.slice(0, 6).map((entry) => (
             <div key={`${entry.type}-${entry.id}`} className="ledger-entry">
               <span>{entry.title}</span>
-              <b>{formatNaira(entry.amount)}</b>
+              <b>{money(entry.amount)}</b>
               <small>{entry.meta}</small>
             </div>
           ))
@@ -697,6 +700,7 @@ function DailyCloseoutPanel({
   shareMessage: string
 }) {
   const shareText = buildWhatsAppCloseoutText(closeout)
+  const money = (amount: number) => formatCurrency(amount, closeout.currency)
 
   return (
     <section className="panel-card exact-card closeout-card">
@@ -708,27 +712,27 @@ function DailyCloseoutPanel({
       </div>
       <div className="closeout-grid">
         <span>
-          <b>{formatNaira(closeout.salesTotal)}</b>
+          <b>{money(closeout.salesTotal)}</b>
           Sales
         </span>
         <span>
-          <b>{formatNaira(closeout.estimatedProfit)}</b>
+          <b>{money(closeout.estimatedProfit)}</b>
           Profit
         </span>
         <span>
-          <b>{formatNaira(closeout.expensesTotal)}</b>
+          <b>{money(closeout.expensesTotal)}</b>
           Expenses
         </span>
         <span>
-          <b>{formatNaira(closeout.debtsCreated)}</b>
+          <b>{money(closeout.debtsCreated)}</b>
           New debt
         </span>
       </div>
       <div className="payment-breakdown">
-        <span>Cash {formatNaira(closeout.paymentBreakdown.cash)}</span>
-        <span>Transfer {formatNaira(closeout.paymentBreakdown.transfer)}</span>
-        <span>POS {formatNaira(closeout.paymentBreakdown.pos)}</span>
-        <span>Credit {formatNaira(closeout.paymentBreakdown.credit)}</span>
+        <span>Cash {money(closeout.paymentBreakdown.cash)}</span>
+        <span>Transfer {money(closeout.paymentBreakdown.transfer)}</span>
+        <span>POS {money(closeout.paymentBreakdown.pos)}</span>
+        <span>Credit {money(closeout.paymentBreakdown.credit)}</span>
       </div>
       {closeout.warnings.length > 0 && (
         <div className="closeout-warnings">
@@ -802,14 +806,14 @@ function RecordDetailPanel({
   )
 }
 
-function detailFromSale(sale: Sale): RecordDetail {
+function detailFromSale(sale: Sale, currency: BusinessProfile['currency']): RecordDetail {
   const firstItem = sale.items[0]
   return {
     id: sale.id,
     type: 'sale',
     title: firstItem?.name || 'Sale record',
     meta: `${sale.customerName} - ${sale.paymentStatus}`,
-    amount: formatNaira(sale.total),
+    amount: formatCurrency(sale.total, currency),
     status: sale.isVoid ? 'Voided' : statusLabel(sale.status),
     evidenceCount: sale.evidenceCount,
     isVoid: sale.isVoid,
@@ -835,13 +839,13 @@ function detailFromSale(sale: Sale): RecordDetail {
   }
 }
 
-function detailFromExpense(expense: Expense): RecordDetail {
+function detailFromExpense(expense: Expense, currency: BusinessProfile['currency']): RecordDetail {
   return {
     id: expense.id,
     type: 'expense',
     title: expense.label,
     meta: expense.category,
-    amount: formatNaira(expense.amount),
+    amount: formatCurrency(expense.amount, currency),
     status: expense.isVoid ? 'Voided' : statusLabel(expense.status),
     evidenceCount: expense.evidenceCount,
     isVoid: expense.isVoid,
@@ -866,13 +870,13 @@ function detailFromExpense(expense: Expense): RecordDetail {
   }
 }
 
-function detailFromDebt(debt: DebtRecord): RecordDetail {
+function detailFromDebt(debt: DebtRecord, currency: BusinessProfile['currency']): RecordDetail {
   return {
     id: debt.id,
     type: 'debt',
     title: debt.customerName,
     meta: debt.lastActivity,
-    amount: formatNaira(Math.max(debt.amount - debt.paidAmount, 0)),
+    amount: formatCurrency(Math.max(debt.amount - debt.paidAmount, 0), currency),
     status: debt.isVoid ? 'Voided' : statusLabel(debt.status),
     evidenceCount: debt.evidenceCount,
     isVoid: debt.isVoid,
@@ -898,13 +902,13 @@ function detailFromDebt(debt: DebtRecord): RecordDetail {
   }
 }
 
-function detailFromStock(movement: StockMovement): RecordDetail {
+function detailFromStock(movement: StockMovement, currency: BusinessProfile['currency']): RecordDetail {
   return {
     id: movement.id,
     type: 'stock',
     title: movement.productName,
     meta: movement.note || `${movement.quantity} ${movement.unit}`,
-    amount: formatNaira(movement.quantity * movement.unitCost),
+    amount: formatCurrency(movement.quantity * movement.unitCost, currency),
     status: movement.isVoid ? 'Voided' : statusLabel(movement.status),
     evidenceCount: movement.evidenceCount,
     isVoid: movement.isVoid,
