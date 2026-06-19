@@ -91,7 +91,8 @@ export const recentSales: Sale[] = [
     balanceOwed: 10000,
     evidenceCount: 1,
     time: '9:30 AM',
-    createdAt: now
+    createdAt: now,
+    isVoid: false
   },
   {
     id: 'sale-rice',
@@ -106,7 +107,8 @@ export const recentSales: Sale[] = [
     paymentStatus: 'paid',
     evidenceCount: 0,
     time: '10:45 AM',
-    createdAt: now
+    createdAt: now,
+    isVoid: false
   }
 ]
 
@@ -122,7 +124,8 @@ export const debtRecords: DebtRecord[] = [
     sinceLabel: 'Owes since 16 Jun',
     lastActivity: '3 shirts',
     evidenceCount: 1,
-    createdAt: now
+    createdAt: now,
+    isVoid: false
   },
   {
     id: 'debt-mama-b',
@@ -135,7 +138,8 @@ export const debtRecords: DebtRecord[] = [
     sinceLabel: 'Owes since 14 Jun',
     lastActivity: 'Rice and oil',
     evidenceCount: 0,
-    createdAt: now
+    createdAt: now,
+    isVoid: false
   }
 ]
 
@@ -150,7 +154,8 @@ export const expenses: Expense[] = [
     paymentMethod: 'cash',
     evidenceCount: 0,
     time: '2:10 PM',
-    createdAt: now
+    createdAt: now,
+    isVoid: false
   }
 ]
 
@@ -166,7 +171,8 @@ export const stockMovements: StockMovement[] = [
     movementType: 'in',
     note: 'Opening stock record',
     evidenceCount: 0,
-    createdAt: now
+    createdAt: now,
+    isVoid: false
   }
 ]
 
@@ -178,6 +184,7 @@ export const initialRecords: MarketRecords = {
   expenses,
   stockMovements,
   evidence: [],
+  scanDrafts: [],
   activityLog: [
     {
       id: 'activity-sale-shirts',
@@ -208,6 +215,7 @@ export const emptyRecords: MarketRecords = {
   expenses: [],
   stockMovements: [],
   evidence: [],
+  scanDrafts: [],
   activityLog: []
 }
 

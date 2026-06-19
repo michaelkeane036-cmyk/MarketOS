@@ -45,6 +45,8 @@ export interface Customer {
   phone?: string
   initials: string
   notes?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface Product {
@@ -57,6 +59,8 @@ export interface Product {
   unitCost: number
   sellingPrice: number
   iconLabel: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface SaleItem {
@@ -64,9 +68,19 @@ export interface SaleItem {
   name: string
   quantity: number
   unitPrice: number
+  unitCost?: number
 }
 
-export interface Sale {
+export interface RecordLifecycle {
+  isVoid: boolean
+  voidReason?: string
+  voidedAt?: string
+  voidedBy?: string
+  correctedByRecordType?: RecordKind
+  correctedByRecordId?: string
+}
+
+export interface Sale extends RecordLifecycle {
   id: string
   status: RecordStatus
   source: 'manual' | 'scan'
@@ -83,7 +97,7 @@ export interface Sale {
   createdAt: string
 }
 
-export interface DebtRecord {
+export interface DebtRecord extends RecordLifecycle {
   id: string
   status: RecordStatus
   customerId: string
@@ -97,7 +111,7 @@ export interface DebtRecord {
   createdAt: string
 }
 
-export interface Expense {
+export interface Expense extends RecordLifecycle {
   id: string
   status: RecordStatus
   source: 'manual' | 'scan'
@@ -134,6 +148,9 @@ export interface CapturedImage {
   source: ScanSource
   dataUrl: string
   capturedAt: string
+  storagePath?: string
+  fileName?: string
+  mimeType?: string
 }
 
 export interface ReviewEntryDraft {
@@ -151,14 +168,56 @@ export interface ReviewEntryDraft {
   stockUnit: string
   note: string
   evidence?: CapturedImage
+  productId?: string
+  customerId?: string
+  scanDraftId?: string
+  correctsRecordType?: RecordKind
+  correctsRecordId?: string
 }
 
 export interface ScanDraft {
+  id?: string
   image: CapturedImage
   entry: ReviewEntryDraft
+  status?: RecordStatus
+  imagePath?: string
+  createdAt?: string
+  reviewedAt?: string
 }
 
-export interface StockMovement {
+export interface PersistedScanDraft {
+  id: string
+  source: ScanSource
+  status: RecordStatus
+  imagePath?: string
+  imageUrl?: string
+  entryType: RecordKind
+  extractedSummary?: string
+  reviewedRecordType?: RecordKind
+  reviewedRecordId?: string
+  createdAt: string
+  reviewedAt?: string
+}
+
+export interface ProductDraft {
+  id?: string
+  name: string
+  category: string
+  stock: string
+  reorderPoint: string
+  unit: string
+  unitCost: string
+  sellingPrice: string
+}
+
+export interface CustomerDraft {
+  id?: string
+  name: string
+  phone: string
+  notes: string
+}
+
+export interface StockMovement extends RecordLifecycle {
   id: string
   status: RecordStatus
   productId: string
@@ -210,5 +269,6 @@ export interface MarketRecords {
   expenses: Expense[]
   stockMovements: StockMovement[]
   evidence: TransactionEvidence[]
+  scanDrafts: PersistedScanDraft[]
   activityLog: ActivityLogEntry[]
 }

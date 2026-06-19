@@ -9,14 +9,31 @@ import WorkspaceScreen, { type WorkspaceView } from './screens/WorkspaceScreen'
 import type { MainTab } from './components/AppBottomNav'
 import { hasSupabaseConfig, supabase } from './lib/supabase'
 import {
+  applyLocalCustomer,
+  applyLocalProduct,
   applyLocalRecord,
+  applyLocalVoid,
   createBusinessWorkspace,
+  createScanDraftInSupabase,
   loadMarketWorkspace,
-  saveReviewedRecordToSupabase
+  saveCustomerToSupabase,
+  saveProductToSupabase,
+  saveReviewedRecordToSupabase,
+  voidRecordInSupabase
 } from './lib/marketosRepository'
 import { business, defaultReviewDraft, emptyRecords, initialRecords } from './data/mockData'
-import { buildDashboardModel, cloneRecords } from './utils/records'
-import type { AuthMode, AuthSession, BusinessSetupDraft, CapturedImage, RecordKind, ReviewEntryDraft, ScanDraft } from './types'
+import { buildDashboardModel, cloneRecords, createDraftForKind } from './utils/records'
+import type {
+  AuthMode,
+  AuthSession,
+  BusinessSetupDraft,
+  CapturedImage,
+  CustomerDraft,
+  ProductDraft,
+  RecordKind,
+  ReviewEntryDraft,
+  ScanDraft
+} from './types'
 
 type AppView = MainTab | WorkspaceView | 'scan' | 'review' | 'record'
 
@@ -36,6 +53,7 @@ export default function App() {
   const [businessProfile, setBusinessProfile] = useState(business)
   const [records, setRecords] = useState(() => cloneRecords(initialRecords))
   const [recordType, setRecordType] = useState<RecordKind>('sale')
+  const [recordInitialDraft, setRecordInitialDraft] = useState<ReviewEntryDraft | null>(null)
   const [scanDraft, setScanDraft] = useState<ScanDraft | null>(null)
   const [authMessage, setAuthMessage] = useState('')
   const [isAuthBusy, setIsAuthBusy] = useState(false)
@@ -244,7 +262,15 @@ export default function App() {
 
   const handleStartRecord = (type: RecordKind) => {
     setRecordType(type)
+    setRecordInitialDraft(null)
     setView('record')
+  }
+
+  const reloadWorkspace = async () => {
+    if (session?.provider !== 'supabase' || !supabase) return
+    const workspace = await loadMarketWorkspace(session.user.id)
+    if (workspace.business) setBusinessProfile({ ...workspace.business, ownerName: businessProfile.ownerName })
+    setRecords(workspace.records)
   }
 
   const handleSaveRecord = async (entry: ReviewEntryDraft, source: 'manual' | 'scan') => {
@@ -259,9 +285,7 @@ export default function App() {
           entry,
           source
         })
-        const workspace = await loadMarketWorkspace(session.user.id)
-        if (workspace.business) setBusinessProfile({ ...workspace.business, ownerName: businessProfile.ownerName })
-        setRecords(workspace.records)
+        await reloadWorkspace()
       } catch (error) {
         setAuthMessage(`Saved locally only. Supabase save failed: ${messageFromError(error)}`)
         setRecords((current) => applyLocalRecord(current, entry, source))
@@ -274,12 +298,98 @@ export default function App() {
     }
 
     setScanDraft(null)
+    setRecordInitialDraft(null)
     setView('today')
   }
 
-  const handleCapture = (image: CapturedImage) => {
-    setScanDraft({ image, entry: { ...defaultReviewDraft, evidence: image } })
+  const handleCapture = async (image: CapturedImage) => {
+    if (session?.provider === 'supabase' && supabase && businessProfile.setupComplete) {
+      try {
+        const persistedDraft = await createScanDraftInSupabase({ business: businessProfile, image })
+        setScanDraft(persistedDraft)
+        await reloadWorkspace()
+      } catch (error) {
+        setAuthMessage(`Scan draft stayed local. Supabase draft failed: ${messageFromError(error)}`)
+        setScanDraft({ image, entry: { ...defaultReviewDraft, evidence: image } })
+      }
+    } else {
+      setScanDraft({ image, entry: { ...defaultReviewDraft, evidence: image } })
+    }
+
     setView('review')
+  }
+
+  const handleReviewPersistedDraft = (draftId: string) => {
+    const draft = records.scanDrafts.find((item) => item.id === draftId)
+    if (!draft) return
+
+    const image: CapturedImage = {
+      source: draft.source,
+      dataUrl: draft.imageUrl || '',
+      capturedAt: draft.createdAt,
+      storagePath: draft.imagePath
+    }
+
+    setScanDraft({
+      id: draft.id,
+      image,
+      imagePath: draft.imagePath,
+      status: draft.status,
+      createdAt: draft.createdAt,
+      reviewedAt: draft.reviewedAt,
+      entry: {
+        ...createDraftForReview(draft.entryType),
+        summary: draft.extractedSummary || 'Review scan before saving.',
+        evidence: image,
+        scanDraftId: draft.id
+      }
+    })
+    setView('review')
+  }
+
+  const handleSaveProduct = async (draft: ProductDraft) => {
+    if (session?.provider === 'supabase' && supabase && businessProfile.setupComplete) {
+      try {
+        await saveProductToSupabase(businessProfile.id, draft)
+        await reloadWorkspace()
+        return
+      } catch (error) {
+        setAuthMessage(`Product saved locally only. Supabase failed: ${messageFromError(error)}`)
+      }
+    }
+    setRecords((current) => applyLocalProduct(current, draft))
+  }
+
+  const handleSaveCustomer = async (draft: CustomerDraft) => {
+    if (session?.provider === 'supabase' && supabase && businessProfile.setupComplete) {
+      try {
+        await saveCustomerToSupabase(businessProfile.id, draft)
+        await reloadWorkspace()
+        return
+      } catch (error) {
+        setAuthMessage(`Customer saved locally only. Supabase failed: ${messageFromError(error)}`)
+      }
+    }
+    setRecords((current) => applyLocalCustomer(current, draft))
+  }
+
+  const handleVoidRecord = async (recordTypeToVoid: RecordKind, recordId: string, reason: string) => {
+    if (session?.provider === 'supabase' && supabase && businessProfile.setupComplete) {
+      try {
+        await voidRecordInSupabase(businessProfile.id, recordTypeToVoid, recordId, reason)
+        await reloadWorkspace()
+        return
+      } catch (error) {
+        setAuthMessage(`Record voided locally only. Supabase failed: ${messageFromError(error)}`)
+      }
+    }
+    setRecords((current) => applyLocalVoid(current, recordTypeToVoid, recordId, reason))
+  }
+
+  const handleCorrectRecord = (type: RecordKind, draft: ReviewEntryDraft) => {
+    setRecordType(type)
+    setRecordInitialDraft(draft)
+    setView('record')
   }
 
   if (!session) {
@@ -322,6 +432,9 @@ export default function App() {
     return (
       <RecordEntryScreen
         type={recordType}
+        customers={records.customers}
+        initialDraft={recordInitialDraft ?? undefined}
+        products={records.products}
         onBack={() => setView('today')}
         onScan={() => setView('scan')}
         onSave={(entry) => {
@@ -364,14 +477,21 @@ export default function App() {
         products={records.products}
         recentRecords={dashboard.recentRecords}
         sales={records.sales}
+        scanDrafts={records.scanDrafts}
         session={session}
         stockAlerts={dashboard.stockAlerts}
         stockMovements={records.stockMovements}
         view={view}
+        customers={records.customers}
+        onCorrectRecord={handleCorrectRecord}
         onLogout={handleLogout}
         onNavigate={setView}
+        onReviewDraft={handleReviewPersistedDraft}
         onScan={() => setView('scan')}
+        onSaveCustomer={(draft) => void handleSaveCustomer(draft)}
+        onSaveProduct={(draft) => void handleSaveProduct(draft)}
         onStartRecord={handleStartRecord}
+        onVoidRecord={(type, id, reason) => void handleVoidRecord(type, id, reason)}
       />
     )
   }
@@ -396,4 +516,13 @@ export default function App() {
 
 function messageFromError(error: unknown) {
   return error instanceof Error ? error.message : String(error)
+}
+
+function createDraftForReview(type: RecordKind): ReviewEntryDraft {
+  return {
+    ...createDraftForKind(type),
+    summary: 'Review scan before saving.',
+    evidence: undefined,
+    scanDraftId: undefined
+  }
 }

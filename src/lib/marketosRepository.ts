@@ -1,18 +1,25 @@
 import { business as defaultBusiness, emptyRecords } from '../data/mockData'
 import { supabase } from './supabase'
-import { applyReviewedRecord, cloneRecords } from '../utils/records'
-import { formatTime, parseMoney, parseQuantity } from '../utils/format'
+import { applyReviewedRecord, cloneRecords, createDraftForKind, voidLocalRecord } from '../utils/records'
+import { formatTime, parseMoney } from '../utils/format'
 import type {
   BusinessProfile,
   BusinessSetupDraft,
+  CapturedImage,
+  Customer,
+  CustomerDraft,
   MarketRecords,
   PaymentMethod,
+  PersistedScanDraft,
   Product,
+  ProductDraft,
   RecordKind,
+  RecordLifecycle,
   RecordStatus,
   ReviewEntryDraft,
   Sale,
   SaleItem,
+  ScanDraft,
   ScanSource
 } from '../types'
 
@@ -28,6 +35,11 @@ interface SaveRecordInput {
   source: 'manual' | 'scan'
 }
 
+interface CreateScanDraftInput {
+  business: BusinessProfile
+  image: CapturedImage
+}
+
 type BusinessRow = {
   id: string
   name: string
@@ -36,6 +48,15 @@ type BusinessRow = {
   currency: string
   operating_note: string
   setup_complete: boolean
+}
+
+type LifecycleRow = {
+  is_void?: boolean | null
+  void_reason?: string | null
+  voided_at?: string | null
+  voided_by?: string | null
+  corrected_by_record_type?: RecordKind | null
+  corrected_by_record_id?: string | null
 }
 
 type ProductRow = {
@@ -48,6 +69,8 @@ type ProductRow = {
   unit_cost: number | string
   selling_price: number | string
   icon_label: string | null
+  created_at?: string | null
+  updated_at?: string | null
 }
 
 type CustomerRow = {
@@ -55,9 +78,11 @@ type CustomerRow = {
   name: string
   phone: string | null
   notes: string | null
+  created_at?: string | null
+  updated_at?: string | null
 }
 
-type SaleRow = {
+type SaleRow = LifecycleRow & {
   id: string
   customer_name: string
   total: number | string
@@ -79,7 +104,7 @@ type SaleRow = {
   }>
 }
 
-type ExpenseRow = {
+type ExpenseRow = LifecycleRow & {
   id: string
   label: string
   amount: number | string
@@ -91,7 +116,7 @@ type ExpenseRow = {
   created_at: string
 }
 
-type DebtRow = {
+type DebtRow = LifecycleRow & {
   id: string
   customer_id: string | null
   customer_name: string
@@ -102,7 +127,7 @@ type DebtRow = {
   created_at: string
 }
 
-type StockMovementRow = {
+type StockMovementRow = LifecycleRow & {
   id: string
   product_id: string | null
   product_name: string
@@ -122,6 +147,21 @@ type EvidenceRow = {
   source: ScanSource
   image_path: string | null
   captured_at: string | null
+}
+
+type ScanDraftRow = {
+  id: string
+  source: ScanSource
+  status: RecordStatus
+  image_path: string | null
+  file_name: string | null
+  mime_type: string | null
+  entry_type: RecordKind
+  extracted_summary: string | null
+  reviewed_record_type: RecordKind | null
+  reviewed_record_id: string | null
+  created_at: string
+  reviewed_at: string | null
 }
 
 type ActivityRow = {
@@ -207,40 +247,138 @@ export async function createBusinessWorkspace(setup: BusinessSetupDraft, userId:
 export async function saveReviewedRecordToSupabase(input: SaveRecordInput): Promise<void> {
   assertSupabase()
 
-  if (input.entry.type === 'sale') {
-    await saveSale(input)
-    return
+  const payload = await buildSavePayload(input)
+  const { error } = await supabase!.rpc('marketos_save_reviewed_record', {
+    target_business_id: input.business.id,
+    payload
+  })
+
+  if (error) throw error
+}
+
+export async function voidRecordInSupabase(businessId: string, recordType: RecordKind, recordId: string, reason: string): Promise<void> {
+  assertSupabase()
+
+  const { error } = await supabase!.rpc('marketos_void_record', {
+    target_business_id: businessId,
+    target_record_type: recordType,
+    target_record_id: recordId,
+    reason
+  })
+
+  if (error) throw error
+}
+
+export async function saveProductToSupabase(businessId: string, draft: ProductDraft): Promise<void> {
+  assertSupabase()
+
+  const payload = {
+    business_id: businessId,
+    name: draft.name.trim() || 'General item',
+    category: draft.category.trim() || 'General',
+    stock: parseMoney(draft.stock),
+    reorder_point: parseMoney(draft.reorderPoint),
+    unit: draft.unit.trim() || 'items',
+    unit_cost: parseMoney(draft.unitCost),
+    selling_price: parseMoney(draft.sellingPrice),
+    icon_label: initialsFor(draft.name)
   }
 
-  if (input.entry.type === 'expense') {
-    await saveExpense(input)
-    return
+  const request = draft.id
+    ? supabase!.from('products').update(payload).eq('id', draft.id).eq('business_id', businessId)
+    : supabase!.from('products').insert(payload)
+
+  const { error } = await request
+  if (error) throw error
+}
+
+export async function saveCustomerToSupabase(businessId: string, draft: CustomerDraft): Promise<void> {
+  assertSupabase()
+
+  const payload = {
+    business_id: businessId,
+    name: draft.name.trim() || 'Customer',
+    phone: draft.phone.trim() || null,
+    notes: draft.notes.trim() || null
   }
 
-  if (input.entry.type === 'stock') {
-    await saveStock(input)
-    return
+  const request = draft.id
+    ? supabase!.from('customers').update(payload).eq('id', draft.id).eq('business_id', businessId)
+    : supabase!.from('customers').insert(payload)
+
+  const { error } = await request
+  if (error) throw error
+}
+
+export async function createScanDraftInSupabase(input: CreateScanDraftInput): Promise<ScanDraft> {
+  assertSupabase()
+
+  const upload = await uploadEvidenceImage(input.business.id, `draft-${Date.now()}`, input.image.dataUrl)
+  const image: CapturedImage = {
+    ...input.image,
+    storagePath: upload?.path,
+    fileName: upload?.fileName,
+    mimeType: upload?.mimeType
   }
 
-  await saveDebt(input)
+  const { data, error } = await supabase!.rpc('marketos_create_scan_draft', {
+    target_business_id: input.business.id,
+    payload: {
+      imagePath: upload?.path ?? null,
+      fileName: upload?.fileName ?? null,
+      mimeType: upload?.mimeType ?? null,
+      source: input.image.source,
+      capturedAt: input.image.capturedAt,
+      entryType: 'sale',
+      summary: 'Manual review required before saving.'
+    }
+  })
+
+  if (error) throw error
+
+  const draftId = typeof data === 'object' && data && 'draftId' in data ? String(data.draftId) : undefined
+  const entry = {
+    ...createDraftForKind('sale'),
+    evidence: image,
+    scanDraftId: draftId
+  }
+
+  return {
+    id: draftId,
+    image,
+    entry,
+    status: 'draft',
+    imagePath: upload?.path,
+    createdAt: new Date().toISOString()
+  }
 }
 
 async function loadRecordsForBusiness(businessId: string): Promise<MarketRecords> {
-  const [productsResult, customersResult, salesResult, expensesResult, debtsResult, stockResult, evidenceResult, activityResult] =
-    await Promise.all([
-      supabase!.from('products').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
-      supabase!.from('customers').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
-      supabase!
-        .from('sales')
-        .select('*, sale_items(*)')
-        .eq('business_id', businessId)
-        .order('created_at', { ascending: false }),
-      supabase!.from('expenses').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
-      supabase!.from('debts').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
-      supabase!.from('stock_movements').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
-      supabase!.from('transaction_evidence').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
-      supabase!.from('activity_log').select('*').eq('business_id', businessId).order('created_at', { ascending: false })
-    ])
+  const [
+    productsResult,
+    customersResult,
+    salesResult,
+    expensesResult,
+    debtsResult,
+    stockResult,
+    evidenceResult,
+    scanDraftsResult,
+    activityResult
+  ] = await Promise.all([
+    supabase!.from('products').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
+    supabase!.from('customers').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
+    supabase!
+      .from('sales')
+      .select('*, sale_items(*)')
+      .eq('business_id', businessId)
+      .order('created_at', { ascending: false }),
+    supabase!.from('expenses').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
+    supabase!.from('debts').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
+    supabase!.from('stock_movements').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
+    supabase!.from('transaction_evidence').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
+    supabase!.from('scan_drafts').select('*').eq('business_id', businessId).order('created_at', { ascending: false }),
+    supabase!.from('activity_log').select('*').eq('business_id', businessId).order('created_at', { ascending: false })
+  ])
 
   const firstError = [
     productsResult.error,
@@ -250,6 +388,7 @@ async function loadRecordsForBusiness(businessId: string): Promise<MarketRecords
     debtsResult.error,
     stockResult.error,
     evidenceResult.error,
+    scanDraftsResult.error,
     activityResult.error
   ].find(Boolean)
   if (firstError) throw firstError
@@ -257,16 +396,11 @@ async function loadRecordsForBusiness(businessId: string): Promise<MarketRecords
   const evidenceRows = (evidenceResult.data ?? []) as EvidenceRow[]
   const evidenceCountFor = (recordType: RecordKind, recordId: string) =>
     evidenceRows.filter((evidence) => evidence.record_type === recordType && evidence.record_id === recordId).length
+  const scanDrafts = await mapScanDrafts((scanDraftsResult.data ?? []) as ScanDraftRow[])
 
   return {
     products: ((productsResult.data ?? []) as ProductRow[]).map(mapProduct),
-    customers: ((customersResult.data ?? []) as CustomerRow[]).map((customer) => ({
-      id: customer.id,
-      name: customer.name,
-      phone: customer.phone ?? undefined,
-      notes: customer.notes ?? undefined,
-      initials: initialsFor(customer.name)
-    })),
+    customers: ((customersResult.data ?? []) as CustomerRow[]).map(mapCustomer),
     sales: ((salesResult.data ?? []) as SaleRow[]).map((sale) => mapSale(sale, evidenceCountFor('sale', sale.id))),
     expenses: ((expensesResult.data ?? []) as ExpenseRow[]).map((expense) => ({
       id: expense.id,
@@ -278,7 +412,8 @@ async function loadRecordsForBusiness(businessId: string): Promise<MarketRecords
       paymentMethod: expense.payment_method,
       evidenceCount: evidenceCountFor('expense', expense.id),
       time: formatRecordTime(expense.occurred_at),
-      createdAt: expense.created_at
+      createdAt: expense.created_at,
+      ...mapLifecycle(expense)
     })),
     debts: ((debtsResult.data ?? []) as DebtRow[]).map((debt) => ({
       id: debt.id,
@@ -291,7 +426,8 @@ async function loadRecordsForBusiness(businessId: string): Promise<MarketRecords
       sinceLabel: `Owes since ${formatShortDate(debt.created_at)}`,
       lastActivity: debt.last_activity ?? 'Debt record',
       evidenceCount: evidenceCountFor('debt', debt.id),
-      createdAt: debt.created_at
+      createdAt: debt.created_at,
+      ...mapLifecycle(debt)
     })),
     stockMovements: ((stockResult.data ?? []) as StockMovementRow[]).map((movement) => ({
       id: movement.id,
@@ -304,7 +440,8 @@ async function loadRecordsForBusiness(businessId: string): Promise<MarketRecords
       movementType: movement.movement_type,
       note: movement.note ?? '',
       evidenceCount: evidenceCountFor('stock', movement.id),
-      createdAt: movement.created_at
+      createdAt: movement.created_at,
+      ...mapLifecycle(movement)
     })),
     evidence: evidenceRows.map((evidence) => ({
       id: evidence.id,
@@ -314,6 +451,7 @@ async function loadRecordsForBusiness(businessId: string): Promise<MarketRecords
       dataUrl: evidence.image_path ?? '',
       capturedAt: evidence.captured_at ?? new Date().toISOString()
     })),
+    scanDrafts,
     activityLog: ((activityResult.data ?? []) as ActivityRow[]).map((activity) => ({
       id: activity.id,
       recordType: activity.record_type ?? 'setup',
@@ -326,217 +464,46 @@ async function loadRecordsForBusiness(businessId: string): Promise<MarketRecords
   }
 }
 
-async function saveSale({ business, userId, entry, source }: SaveRecordInput) {
-  const quantity = Math.max(parseQuantity(entry.quantity), 1)
-  const unitPrice = parseMoney(entry.unitPrice) || parseMoney(entry.amount)
-  const unitCost = parseMoney(entry.unitCost)
-  const total = parseMoney(entry.amount) || quantity * unitPrice
-  const paidAmount = Math.min(parseMoney(entry.paidAmount) || total, total)
-  const balanceOwed = Math.max(total - paidAmount, 0)
-  const status = entry.evidence ? 'evidence_attached' : 'recorded'
-  const product = await findOrCreateProduct(business.id, entry.itemName, entry.stockUnit, unitCost, unitPrice)
+async function buildSavePayload({ business, entry, source }: SaveRecordInput) {
+  let evidence = entry.evidence
 
-  const { data: sale, error: saleError } = await supabase!
-    .from('sales')
-    .insert({
-      business_id: business.id,
-      customer_name: entry.customerName || 'Walk-in customer',
-      total,
-      profit: Math.max((unitPrice - unitCost) * quantity, 0),
-      paid_amount: paidAmount,
-      balance_owed: balanceOwed,
-      payment_method: balanceOwed > 0 ? 'credit' : entry.paymentMethod,
-      payment_status: balanceOwed <= 0 ? 'paid' : paidAmount > 0 ? 'partial' : 'owed',
-      record_status: status,
-      source,
-      created_by: userId
-    })
-    .select('id')
-    .single<{ id: string }>()
-
-  if (saleError) throw saleError
-
-  const { error: itemError } = await supabase!.from('sale_items').insert({
-    sale_id: sale.id,
-    product_id: product.id,
-    name: `${quantity} ${entry.itemName || product.name}`,
-    quantity,
-    unit_price: unitPrice,
-    unit_cost: unitCost
-  })
-  if (itemError) throw itemError
-
-  await supabase!
-    .from('products')
-    .update({ stock: Math.max(product.stock - quantity, 0), unit_cost: unitCost || product.unitCost, selling_price: unitPrice || product.sellingPrice })
-    .eq('id', product.id)
-
-  if (balanceOwed > 0) {
-    const { error: debtError } = await supabase!.from('debts').insert({
-      business_id: business.id,
-      customer_name: entry.customerName || 'Customer',
-      amount: balanceOwed,
-      paid_amount: 0,
-      last_activity: entry.itemName || entry.summary,
-      record_status: status,
-      source_record_id: sale.id,
-      created_by: userId
-    })
-    if (debtError) throw debtError
+  if (evidence?.dataUrl && !evidence.storagePath) {
+    const upload = await uploadEvidenceImage(business.id, `${entry.type}-${Date.now()}`, evidence.dataUrl)
+    evidence = {
+      ...evidence,
+      storagePath: upload?.path,
+      fileName: upload?.fileName,
+      mimeType: upload?.mimeType
+    }
   }
 
-  await saveEvidenceIfPresent(business.id, userId, 'sale', sale.id, entry)
-  await logActivity(business.id, userId, 'sale', sale.id, `Sale recorded for ${entry.customerName || 'Walk-in customer'}`, total, status)
+  return {
+    ...entry,
+    source,
+    quantity: parseMoney(entry.quantity).toString(),
+    unitPrice: parseMoney(entry.unitPrice).toString(),
+    unitCost: parseMoney(entry.unitCost).toString(),
+    amount: parseMoney(entry.amount).toString(),
+    paidAmount: parseMoney(entry.paidAmount).toString(),
+    evidence: evidence
+      ? {
+          source: evidence.source,
+          imagePath: evidence.storagePath,
+          storagePath: evidence.storagePath,
+          fileName: evidence.fileName,
+          mimeType: evidence.mimeType,
+          capturedAt: evidence.capturedAt
+        }
+      : undefined
+  }
 }
 
-async function saveExpense({ business, userId, entry, source }: SaveRecordInput) {
-  const amount = parseMoney(entry.amount)
-  const status = entry.evidence ? 'evidence_attached' : 'recorded'
-
-  const { data: expense, error } = await supabase!
-    .from('expenses')
-    .insert({
-      business_id: business.id,
-      label: entry.itemName || entry.summary || 'Business expense',
-      amount,
-      category: entry.expenseCategory || 'Operations',
-      payment_method: entry.paymentMethod,
-      record_status: status,
-      source,
-      created_by: userId
-    })
-    .select('id')
-    .single<{ id: string }>()
-
-  if (error) throw error
-
-  await saveEvidenceIfPresent(business.id, userId, 'expense', expense.id, entry)
-  await logActivity(business.id, userId, 'expense', expense.id, `Expense recorded: ${entry.itemName || 'Business expense'}`, amount, status)
-}
-
-async function saveStock({ business, userId, entry }: SaveRecordInput) {
-  const quantity = Math.max(parseQuantity(entry.quantity), 1)
-  const unitCost = parseMoney(entry.unitCost)
-  const status = entry.evidence ? 'evidence_attached' : 'recorded'
-  const product = await findOrCreateProduct(business.id, entry.itemName, entry.stockUnit, unitCost, parseMoney(entry.unitPrice))
-
-  await supabase!
-    .from('products')
-    .update({ stock: product.stock + quantity, unit_cost: unitCost || product.unitCost })
-    .eq('id', product.id)
-
-  const { data: movement, error } = await supabase!
-    .from('stock_movements')
-    .insert({
-      business_id: business.id,
-      product_id: product.id,
-      product_name: product.name,
-      movement_type: 'in',
-      quantity,
-      unit: product.unit,
-      unit_cost: unitCost,
-      note: entry.note || entry.summary,
-      record_status: status,
-      created_by: userId
-    })
-    .select('id')
-    .single<{ id: string }>()
-
-  if (error) throw error
-
-  await saveEvidenceIfPresent(business.id, userId, 'stock', movement.id, entry)
-  await logActivity(business.id, userId, 'stock', movement.id, `Stock added: ${product.name}`, quantity * unitCost, status)
-}
-
-async function saveDebt({ business, userId, entry }: SaveRecordInput) {
-  const amount = parseMoney(entry.amount)
-  const status = entry.evidence ? 'evidence_attached' : 'recorded'
-
-  const { data: debt, error } = await supabase!
-    .from('debts')
-    .insert({
-      business_id: business.id,
-      customer_name: entry.customerName || 'Customer',
-      amount,
-      paid_amount: parseMoney(entry.paidAmount),
-      last_activity: entry.itemName || entry.summary || 'Manual debt record',
-      record_status: status,
-      created_by: userId
-    })
-    .select('id')
-    .single<{ id: string }>()
-
-  if (error) throw error
-
-  await saveEvidenceIfPresent(business.id, userId, 'debt', debt.id, entry)
-  await logActivity(business.id, userId, 'debt', debt.id, `Debt recorded for ${entry.customerName || 'Customer'}`, amount, status)
-}
-
-async function findOrCreateProduct(businessId: string, name: string, unit: string, unitCost: number, sellingPrice: number): Promise<Product> {
-  const productName = name || 'General item'
-  const { data: existing, error: existingError } = await supabase!
-    .from('products')
-    .select('*')
-    .eq('business_id', businessId)
-    .ilike('name', productName)
-    .limit(1)
-    .maybeSingle<ProductRow>()
-
-  if (existingError) throw existingError
-  if (existing) return mapProduct(existing)
-
-  const { data: created, error: createError } = await supabase!
-    .from('products')
-    .insert({
-      business_id: businessId,
-      name: productName,
-      category: 'General',
-      stock: 0,
-      reorder_point: 5,
-      unit: unit || 'items',
-      unit_cost: unitCost,
-      selling_price: sellingPrice || unitCost,
-      icon_label: initialsFor(productName)
-    })
-    .select('*')
-    .single<ProductRow>()
-
-  if (createError) throw createError
-  return mapProduct(created)
-}
-
-async function saveEvidenceIfPresent(
-  businessId: string,
-  userId: string,
-  recordType: RecordKind,
-  recordId: string,
-  entry: ReviewEntryDraft
-) {
-  if (!entry.evidence) return
-
-  const upload = await uploadEvidenceImage(businessId, recordType, recordId, entry.evidence.dataUrl)
-
-  const { error } = await supabase!.from('transaction_evidence').insert({
-    business_id: businessId,
-    record_type: recordType,
-    record_id: recordId,
-    source: entry.evidence.source,
-    image_path: upload?.path ?? null,
-    file_name: upload?.fileName ?? null,
-    mime_type: upload?.mimeType ?? null,
-    uploaded_by: userId,
-    captured_at: entry.evidence.capturedAt
-  })
-
-  if (error) throw error
-}
-
-async function uploadEvidenceImage(businessId: string, recordType: RecordKind, recordId: string, dataUrl: string) {
+async function uploadEvidenceImage(businessId: string, namePrefix: string, dataUrl: string) {
   const parsed = dataUrlToBlob(dataUrl)
   if (!parsed) return null
 
   const extension = parsed.mimeType.split('/')[1] || 'jpg'
-  const fileName = `${recordType}-${recordId}-${Date.now()}.${extension}`
+  const fileName = `${namePrefix}.${extension}`
   const path = `${businessId}/${fileName}`
   const { error } = await supabase!.storage.from('marketos-evidence').upload(path, parsed.blob, {
     contentType: parsed.mimeType,
@@ -551,27 +518,31 @@ async function uploadEvidenceImage(businessId: string, recordType: RecordKind, r
   return { path, fileName, mimeType: parsed.mimeType }
 }
 
-async function logActivity(
-  businessId: string,
-  userId: string,
-  recordType: RecordKind,
-  recordId: string,
-  message: string,
-  amount: number,
-  status: RecordStatus
-) {
-  const { error } = await supabase!.from('activity_log').insert({
-    business_id: businessId,
-    actor_id: userId,
-    action: 'record_saved',
-    record_type: recordType,
-    record_id: recordId,
-    message,
-    amount,
-    record_status: status
-  })
+async function mapScanDrafts(rows: ScanDraftRow[]): Promise<PersistedScanDraft[]> {
+  return Promise.all(
+    rows.map(async (row) => {
+      let imageUrl: string | undefined
 
-  if (error) throw error
+      if (row.image_path) {
+        const { data } = await supabase!.storage.from('marketos-evidence').createSignedUrl(row.image_path, 60 * 30)
+        imageUrl = data?.signedUrl
+      }
+
+      return {
+        id: row.id,
+        source: row.source,
+        status: row.status,
+        imagePath: row.image_path ?? undefined,
+        imageUrl,
+        entryType: row.entry_type,
+        extractedSummary: row.extracted_summary ?? undefined,
+        reviewedRecordType: row.reviewed_record_type ?? undefined,
+        reviewedRecordId: row.reviewed_record_id ?? undefined,
+        createdAt: row.created_at,
+        reviewedAt: row.reviewed_at ?? undefined
+      }
+    })
+  )
 }
 
 function mapBusiness(row: BusinessRow): BusinessProfile {
@@ -597,7 +568,21 @@ function mapProduct(row: ProductRow): Product {
     unit: row.unit,
     unitCost: toNumber(row.unit_cost),
     sellingPrice: toNumber(row.selling_price),
-    iconLabel: row.icon_label ?? initialsFor(row.name)
+    iconLabel: row.icon_label ?? initialsFor(row.name),
+    createdAt: row.created_at ?? undefined,
+    updatedAt: row.updated_at ?? undefined
+  }
+}
+
+function mapCustomer(row: CustomerRow): Customer {
+  return {
+    id: row.id,
+    name: row.name,
+    phone: row.phone ?? undefined,
+    notes: row.notes ?? undefined,
+    initials: initialsFor(row.name),
+    createdAt: row.created_at ?? undefined,
+    updatedAt: row.updated_at ?? undefined
   }
 }
 
@@ -606,7 +591,8 @@ function mapSale(row: SaleRow, evidenceCount: number): Sale {
     productId: item.product_id ?? '',
     name: item.name,
     quantity: toNumber(item.quantity),
-    unitPrice: toNumber(item.unit_price)
+    unitPrice: toNumber(item.unit_price),
+    unitCost: toNumber(item.unit_cost)
   }))
 
   return {
@@ -623,7 +609,19 @@ function mapSale(row: SaleRow, evidenceCount: number): Sale {
     balanceOwed: toNumber(row.balance_owed) || undefined,
     evidenceCount,
     time: formatRecordTime(row.occurred_at),
-    createdAt: row.created_at
+    createdAt: row.created_at,
+    ...mapLifecycle(row)
+  }
+}
+
+function mapLifecycle(row: LifecycleRow): RecordLifecycle {
+  return {
+    isVoid: Boolean(row.is_void),
+    voidReason: row.void_reason ?? undefined,
+    voidedAt: row.voided_at ?? undefined,
+    voidedBy: row.voided_by ?? undefined,
+    correctedByRecordType: row.corrected_by_record_type ?? undefined,
+    correctedByRecordId: row.corrected_by_record_id ?? undefined
   }
 }
 
@@ -677,4 +675,42 @@ function assertSupabase() {
 
 export function applyLocalRecord(records: MarketRecords, entry: ReviewEntryDraft, source: 'manual' | 'scan') {
   return applyReviewedRecord(records, entry, source)
+}
+
+export function applyLocalVoid(records: MarketRecords, recordType: RecordKind, recordId: string, reason: string) {
+  return voidLocalRecord(records, recordType, recordId, reason)
+}
+
+export function applyLocalProduct(records: MarketRecords, draft: ProductDraft) {
+  const next = cloneRecords(records)
+  const product: Product = {
+    id: draft.id || `product-${Date.now()}`,
+    name: draft.name.trim() || 'General item',
+    category: draft.category.trim() || 'General',
+    stock: parseMoney(draft.stock),
+    reorderPoint: parseMoney(draft.reorderPoint),
+    unit: draft.unit.trim() || 'items',
+    unitCost: parseMoney(draft.unitCost),
+    sellingPrice: parseMoney(draft.sellingPrice),
+    iconLabel: initialsFor(draft.name)
+  }
+  const existingIndex = next.products.findIndex((item) => item.id === product.id)
+  if (existingIndex >= 0) next.products[existingIndex] = product
+  else next.products.unshift(product)
+  return next
+}
+
+export function applyLocalCustomer(records: MarketRecords, draft: CustomerDraft) {
+  const next = cloneRecords(records)
+  const customer: Customer = {
+    id: draft.id || `customer-${Date.now()}`,
+    name: draft.name.trim() || 'Customer',
+    phone: draft.phone.trim() || undefined,
+    notes: draft.notes.trim() || undefined,
+    initials: initialsFor(draft.name)
+  }
+  const existingIndex = next.customers.findIndex((item) => item.id === customer.id)
+  if (existingIndex >= 0) next.customers[existingIndex] = customer
+  else next.customers.unshift(customer)
+  return next
 }

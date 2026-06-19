@@ -12,11 +12,14 @@ import {
   UserPlus,
   WalletCards
 } from 'lucide-react'
-import type { CapturedImage, PaymentMethod, RecordKind, ReviewEntryDraft } from '../types'
+import type { CapturedImage, Customer, PaymentMethod, Product, RecordKind, ReviewEntryDraft } from '../types'
 import { createDraftForKind } from '../utils/records'
 
 interface RecordEntryScreenProps {
   type: RecordKind
+  customers?: Customer[]
+  initialDraft?: ReviewEntryDraft
+  products?: Product[]
   onBack: () => void
   onScan: () => void
   onSave: (draft: ReviewEntryDraft) => void
@@ -52,14 +55,49 @@ const paymentMethods: Array<{ value: PaymentMethod; label: string }> = [
   { value: 'credit', label: 'Customer owes' }
 ]
 
-export default function RecordEntryScreen({ type, onBack, onScan, onSave }: RecordEntryScreenProps) {
-  const [entry, setEntry] = useState<ReviewEntryDraft>(() => createDraftForKind(type))
+export default function RecordEntryScreen({
+  type,
+  customers = [],
+  initialDraft,
+  products = [],
+  onBack,
+  onScan,
+  onSave
+}: RecordEntryScreenProps) {
+  const [entry, setEntry] = useState<ReviewEntryDraft>(() => initialDraft ?? createDraftForKind(type))
   const meta = recordMeta[type]
   const Icon = meta.icon
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
     onSave(entry)
+  }
+
+  const handleCustomerChange = (value: string) => {
+    const customer = customers.find((item) => item.id === value || item.name.toLowerCase() === value.toLowerCase())
+    if (customer) {
+      setEntry((current) => ({ ...current, customerId: customer.id, customerName: customer.name }))
+      return
+    }
+    setEntry((current) => ({ ...current, customerId: undefined, customerName: value }))
+  }
+
+  const handleProductChange = (value: string) => {
+    const product = products.find((item) => item.id === value || item.name.toLowerCase() === value.toLowerCase())
+    if (product) {
+      const quantity = Number(entry.quantity || 1) || 1
+      setEntry((current) => ({
+        ...current,
+        productId: product.id,
+        itemName: product.name,
+        stockUnit: product.unit,
+        unitCost: String(product.unitCost),
+        unitPrice: String(product.sellingPrice),
+        amount: current.quantity ? String(quantity * product.sellingPrice) : current.amount
+      }))
+      return
+    }
+    setEntry((current) => ({ ...current, productId: undefined, itemName: value }))
   }
 
   const handleEvidenceUpload = (event: ChangeEvent<HTMLInputElement>) => {
@@ -97,8 +135,14 @@ export default function RecordEntryScreen({ type, onBack, onScan, onSave }: Reco
         <form className="review-card record-form" onSubmit={handleSubmit}>
           <div className="quick-title">
             <Icon size={22} />
-            <strong>{entry.evidence ? 'Evidence attached' : 'Owner-reviewed record'}</strong>
+            <strong>{entry.correctsRecordId ? 'Correction review' : entry.evidence ? 'Evidence attached' : 'Owner-reviewed record'}</strong>
           </div>
+
+          {entry.correctsRecordId && (
+            <p className="correction-note">
+              This will keep the original in history, void it as corrected, and save this replacement.
+            </p>
+          )}
 
           <label className="field">
             <span>Summary</span>
@@ -110,12 +154,13 @@ export default function RecordEntryScreen({ type, onBack, onScan, onSave }: Reco
               <span>Customer</span>
               <div>
                 <UserPlus size={18} />
-                <input
-                  value={entry.customerName}
-                  onChange={(event) => setEntry({ ...entry, customerName: event.target.value })}
-                  placeholder="Walk-in customer"
-                />
+                <input value={entry.customerName} onChange={(event) => handleCustomerChange(event.target.value)} placeholder="Walk-in customer" list="customer-options" />
               </div>
+              <datalist id="customer-options">
+                {customers.map((customer) => (
+                  <option key={customer.id} value={customer.name} />
+                ))}
+              </datalist>
             </label>
           )}
 
@@ -127,10 +172,16 @@ export default function RecordEntryScreen({ type, onBack, onScan, onSave }: Reco
                   <ShoppingCart size={18} />
                   <input
                     value={entry.itemName}
-                    onChange={(event) => setEntry({ ...entry, itemName: event.target.value })}
+                    onChange={(event) => handleProductChange(event.target.value)}
                     placeholder="Rice"
+                    list="product-options"
                   />
                 </div>
+                <datalist id="product-options">
+                  {products.map((product) => (
+                    <option key={product.id} value={product.name} />
+                  ))}
+                </datalist>
               </label>
               <label className="field">
                 <span>Qty</span>

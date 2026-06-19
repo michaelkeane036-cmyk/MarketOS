@@ -1,20 +1,25 @@
 import {
+  AlertTriangle,
   Bell,
+  Check,
   ChevronRight,
   CircleUserRound,
   Cuboid,
+  Edit3,
   LogOut,
   MessageCircle,
+  PackagePlus,
   Plus,
   ScanLine,
   ShieldCheck,
   ShoppingCart,
   TrendingUp,
   UserPlus,
-  WalletCards
+  WalletCards,
+  X
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
-import type { ReactNode } from 'react'
+import { FormEvent, ReactNode, useMemo, useState } from 'react'
 import AppBottomNav, { type MainTab } from '../components/AppBottomNav'
 import StatusRow from '../components/StatusRow'
 import { formatNaira } from '../utils/format'
@@ -22,11 +27,16 @@ import { statusLabel } from '../utils/records'
 import type {
   AuthSession,
   BusinessProfile,
+  Customer,
+  CustomerDraft,
   DebtRecord,
   Expense,
+  PersistedScanDraft,
   Product,
+  ProductDraft,
   RecentRecord,
   RecordKind,
+  ReviewEntryDraft,
   Sale,
   StockAlert,
   StockMovement
@@ -37,6 +47,7 @@ export type WorkspaceView = 'sell' | 'stock' | 'debts' | 'insights' | 'notificat
 interface WorkspaceScreenProps {
   authMessage: string
   business: BusinessProfile
+  customers: Customer[]
   debtRecords: DebtRecord[]
   draftCount: number
   estimatedProfit: number
@@ -45,19 +56,39 @@ interface WorkspaceScreenProps {
   products: Product[]
   recentRecords: RecentRecord[]
   sales: Sale[]
+  scanDrafts: PersistedScanDraft[]
   session: AuthSession
   stockAlerts: StockAlert[]
   stockMovements: StockMovement[]
   view: WorkspaceView
+  onCorrectRecord: (type: RecordKind, draft: ReviewEntryDraft) => void
   onLogout: () => void
   onNavigate: (view: MainTab) => void
+  onReviewDraft: (draftId: string) => void
+  onSaveCustomer: (draft: CustomerDraft) => void
+  onSaveProduct: (draft: ProductDraft) => void
   onScan: () => void
   onStartRecord: (type: RecordKind) => void
+  onVoidRecord: (type: RecordKind, id: string, reason: string) => void
+}
+
+interface RecordDetail {
+  id: string
+  type: RecordKind
+  title: string
+  meta: string
+  amount: string
+  status: string
+  evidenceCount: number
+  isVoid: boolean
+  voidReason?: string
+  correctionDraft: ReviewEntryDraft
 }
 
 export default function WorkspaceScreen({
   authMessage,
   business,
+  customers,
   debtRecords,
   draftCount,
   estimatedProfit,
@@ -66,16 +97,37 @@ export default function WorkspaceScreen({
   products,
   recentRecords,
   sales,
+  scanDrafts,
   session,
   stockAlerts,
   stockMovements,
   view,
+  onCorrectRecord,
   onLogout,
   onNavigate,
+  onReviewDraft,
+  onSaveCustomer,
+  onSaveProduct,
   onScan,
-  onStartRecord
+  onStartRecord,
+  onVoidRecord
 }: WorkspaceScreenProps) {
+  const [selectedRecord, setSelectedRecord] = useState<RecordDetail | null>(null)
+  const [voidReason, setVoidReason] = useState('')
   const navActive: MainTab = view === 'notifications' || view === 'account' ? 'today' : view
+  const activeScanDrafts = scanDrafts.filter((draft) => draft.status === 'draft')
+
+  const handleVoid = () => {
+    if (!selectedRecord) return
+    onVoidRecord(selectedRecord.type, selectedRecord.id, voidReason || 'Voided by owner')
+    setSelectedRecord(null)
+    setVoidReason('')
+  }
+
+  const handleCorrect = () => {
+    if (!selectedRecord) return
+    onCorrectRecord(selectedRecord.type, selectedRecord.correctionDraft)
+  }
 
   return (
     <div className="app-shell">
@@ -84,7 +136,7 @@ export default function WorkspaceScreen({
 
         {view === 'sell' && (
           <section className="workspace-stack">
-            <SummaryBand icon={ShoppingCart} title={formatNaira(sales.reduce((total, sale) => total + sale.total, 0))} label={`${sales.length} saved sale records`} tone="green" />
+            <SummaryBand icon={ShoppingCart} title={formatNaira(activeSales(sales).reduce((total, sale) => total + sale.total, 0))} label={`${activeSales(sales).length} active sale records`} tone="green" />
             <div className="workspace-actions">
               <button className="primary-action" type="button" onClick={() => onStartRecord('sale')}>
                 <Plus size={19} />
@@ -95,22 +147,25 @@ export default function WorkspaceScreen({
                 Scan Receipt
               </button>
             </div>
-            <RecordPanel title="Recent Sales" actionLabel="Review all">
+            <CustomerManager customers={customers} onSaveCustomer={onSaveCustomer} compact />
+            <RecordPanel title="Recent Sales" actionLabel="Review">
               {sales.length ? (
-                sales.slice(0, 8).map((sale) => (
+                sales.slice(0, 10).map((sale) => (
                   <StatusRow
                     key={sale.id}
                     avatar="S"
-                    meta={`${sale.customerName} - ${statusLabel(sale.status)}`}
+                    meta={`${sale.customerName} - ${sale.isVoid ? 'Voided' : statusLabel(sale.status)}`}
                     title={sale.items[0]?.name || 'Sale record'}
-                    tone={sale.balanceOwed ? 'coral' : 'green'}
+                    tone={sale.isVoid || sale.balanceOwed ? 'coral' : 'green'}
                     value={formatNaira(sale.total)}
+                    onClick={() => setSelectedRecord(detailFromSale(sale))}
                   />
                 ))
               ) : (
                 <p className="empty-copy">No sale records yet.</p>
               )}
             </RecordPanel>
+            {selectedRecord && <RecordDetailPanel detail={selectedRecord} voidReason={voidReason} onChangeVoidReason={setVoidReason} onClose={() => setSelectedRecord(null)} onCorrect={handleCorrect} onVoid={handleVoid} />}
           </section>
         )}
 
@@ -127,35 +182,25 @@ export default function WorkspaceScreen({
                 Scan Stock
               </button>
             </div>
-            <RecordPanel title="Low Stock" actionLabel="Restock">
-              {stockAlerts.length ? (
-                stockAlerts.map((alert) => (
+            <ProductManager products={products} onSaveProduct={onSaveProduct} />
+            <RecordPanel title="Recent Stock Movement" actionLabel="History">
+              {stockMovements.length ? (
+                stockMovements.slice(0, 8).map((movement) => (
                   <StatusRow
-                    key={alert.id}
-                    actionLabel="Reorder"
-                    avatar={alert.iconLabel}
-                    meta={`${alert.stock} ${alert.unit} left - reorder at ${alert.reorderPoint}`}
-                    title={alert.productName}
-                    tone="amber"
-                    value={`${alert.stock} left`}
+                    key={movement.id}
+                    avatar="ST"
+                    meta={`${movement.quantity} ${movement.unit} - ${movement.isVoid ? 'Voided' : statusLabel(movement.status)}`}
+                    title={movement.productName}
+                    tone={movement.isVoid ? 'coral' : 'blue'}
+                    value={formatNaira(movement.quantity * movement.unitCost)}
+                    onClick={() => setSelectedRecord(detailFromStock(movement))}
                   />
                 ))
               ) : (
-                <p className="empty-copy">Stock levels look healthy.</p>
+                <p className="empty-copy">No stock movements yet.</p>
               )}
             </RecordPanel>
-            <RecordPanel title="Recent Stock Movement" actionLabel="History">
-              {stockMovements.slice(0, 5).map((movement) => (
-                <StatusRow
-                  key={movement.id}
-                  avatar="ST"
-                  meta={`${movement.quantity} ${movement.unit} - ${statusLabel(movement.status)}`}
-                  title={movement.productName}
-                  tone="blue"
-                  value={formatNaira(movement.quantity * movement.unitCost)}
-                />
-              ))}
-            </RecordPanel>
+            {selectedRecord && <RecordDetailPanel detail={selectedRecord} voidReason={voidReason} onChangeVoidReason={setVoidReason} onClose={() => setSelectedRecord(null)} onCorrect={handleCorrect} onVoid={handleVoid} />}
           </section>
         )}
 
@@ -164,7 +209,7 @@ export default function WorkspaceScreen({
             <SummaryBand
               icon={UserPlus}
               title={formatNaira(debtRecords.reduce((total, debt) => total + Math.max(debt.amount - debt.paidAmount, 0), 0))}
-              label={`${debtRecords.length} customer balances to follow up`}
+              label={`${debtRecords.length} active customer balances`}
               tone="coral"
             />
             <div className="workspace-actions">
@@ -177,28 +222,31 @@ export default function WorkspaceScreen({
                 Send Reminders
               </button>
             </div>
+            <CustomerManager customers={customers} onSaveCustomer={onSaveCustomer} />
             <RecordPanel title="Customers Owing" actionLabel="Follow up">
               {debtRecords.length ? (
                 debtRecords.map((debt) => (
                   <StatusRow
                     key={debt.id}
                     avatar={debt.initials}
-                    meta={`${debt.sinceLabel} - ${statusLabel(debt.status)}`}
+                    meta={`${debt.sinceLabel} - ${debt.isVoid ? 'Voided' : statusLabel(debt.status)}`}
                     title={debt.customerName}
                     tone="coral"
                     value={formatNaira(Math.max(debt.amount - debt.paidAmount, 0))}
+                    onClick={() => setSelectedRecord(detailFromDebt(debt))}
                   />
                 ))
               ) : (
                 <p className="empty-copy">No unpaid customer balance.</p>
               )}
             </RecordPanel>
+            {selectedRecord && <RecordDetailPanel detail={selectedRecord} voidReason={voidReason} onChangeVoidReason={setVoidReason} onClose={() => setSelectedRecord(null)} onCorrect={handleCorrect} onVoid={handleVoid} />}
           </section>
         )}
 
         {view === 'insights' && (
           <section className="workspace-stack">
-            <SummaryBand icon={TrendingUp} title={formatNaira(estimatedProfit)} label="Estimated profit from recorded sales" tone="green" />
+            <SummaryBand icon={TrendingUp} title={formatNaira(estimatedProfit)} label="Estimated profit from active records" tone="green" />
             <section className="spending-warning workspace-warning">
               <span className="warning-icon">
                 <WalletCards size={34} />
@@ -215,26 +263,45 @@ export default function WorkspaceScreen({
             </section>
             <RecordPanel title="Expenses" actionLabel="Add">
               {expenses.length ? (
-                expenses.slice(0, 6).map((expense) => (
+                expenses.slice(0, 8).map((expense) => (
                   <StatusRow
                     key={expense.id}
                     avatar="EX"
-                    meta={`${expense.category} - ${statusLabel(expense.status)}`}
+                    meta={`${expense.category} - ${expense.isVoid ? 'Voided' : statusLabel(expense.status)}`}
                     title={expense.label}
                     tone="coral"
                     value={formatNaira(expense.amount)}
+                    onClick={() => setSelectedRecord(detailFromExpense(expense))}
                   />
                 ))
               ) : (
                 <p className="empty-copy">No expenses recorded yet.</p>
               )}
             </RecordPanel>
+            {selectedRecord && <RecordDetailPanel detail={selectedRecord} voidReason={voidReason} onChangeVoidReason={setVoidReason} onClose={() => setSelectedRecord(null)} onCorrect={handleCorrect} onVoid={handleVoid} />}
           </section>
         )}
 
         {view === 'notifications' && (
           <section className="workspace-stack">
-            <SummaryBand icon={Bell} title={`${draftCount} drafts`} label="Items waiting for review or attention" tone={draftCount ? 'amber' : 'green'} />
+            <SummaryBand icon={Bell} title={`${draftCount} drafts`} label="Scans waiting for owner review" tone={draftCount ? 'amber' : 'green'} />
+            <RecordPanel title="Draft Queue" actionLabel="Review">
+              {activeScanDrafts.length ? (
+                activeScanDrafts.map((draft) => (
+                  <StatusRow
+                    key={draft.id}
+                    avatar="DR"
+                    meta={`${statusLabel(draft.status)} - ${new Date(draft.createdAt).toLocaleDateString('en-NG')}`}
+                    title={draft.extractedSummary || 'Scan draft waiting for review'}
+                    tone="amber"
+                    value="Review"
+                    onClick={() => onReviewDraft(draft.id)}
+                  />
+                ))
+              ) : (
+                <p className="empty-copy">No draft scans waiting for review.</p>
+              )}
+            </RecordPanel>
             <RecordPanel title="Activity" actionLabel="Today">
               {recentRecords.length ? (
                 recentRecords.map((record) => (
@@ -332,4 +399,340 @@ function RecordPanel({ actionLabel, children, title }: { actionLabel: string; ch
       {children}
     </section>
   )
+}
+
+function ProductManager({ products, onSaveProduct }: { products: Product[]; onSaveProduct: (draft: ProductDraft) => void }) {
+  const [search, setSearch] = useState('')
+  const [draft, setDraft] = useState<ProductDraft>(emptyProductDraft())
+  const filteredProducts = useMemo(
+    () => products.filter((product) => product.name.toLowerCase().includes(search.toLowerCase())).slice(0, 6),
+    [products, search]
+  )
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    onSaveProduct(draft)
+    setDraft(emptyProductDraft())
+  }
+
+  return (
+    <section className="panel-card exact-card management-card">
+      <div className="panel-topline">
+        <h3>Products</h3>
+        <button type="button" onClick={() => setDraft(emptyProductDraft())}>
+          New
+        </button>
+      </div>
+      <input className="management-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search products" />
+      <div className="mini-list">
+        {filteredProducts.map((product) => (
+          <button key={product.id} type="button" onClick={() => setDraft(productToDraft(product))}>
+            <span>{product.name}</span>
+            <b>{product.stock} {product.unit}</b>
+          </button>
+        ))}
+      </div>
+      <form className="management-form" onSubmit={handleSubmit}>
+        <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Product name" />
+        <div className="management-grid">
+          <input value={draft.stock} onChange={(event) => setDraft({ ...draft, stock: event.target.value })} placeholder="Stock" inputMode="decimal" />
+          <input value={draft.reorderPoint} onChange={(event) => setDraft({ ...draft, reorderPoint: event.target.value })} placeholder="Reorder" inputMode="decimal" />
+        </div>
+        <div className="management-grid">
+          <input value={draft.unitCost} onChange={(event) => setDraft({ ...draft, unitCost: event.target.value })} placeholder="Cost" inputMode="decimal" />
+          <input value={draft.sellingPrice} onChange={(event) => setDraft({ ...draft, sellingPrice: event.target.value })} placeholder="Selling" inputMode="decimal" />
+        </div>
+        <div className="management-grid">
+          <input value={draft.unit} onChange={(event) => setDraft({ ...draft, unit: event.target.value })} placeholder="Unit" />
+          <input value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} placeholder="Category" />
+        </div>
+        <button className="mini-save-button" type="submit">
+          <Check size={16} />
+          Save product
+        </button>
+      </form>
+    </section>
+  )
+}
+
+function CustomerManager({
+  compact,
+  customers,
+  onSaveCustomer
+}: {
+  compact?: boolean
+  customers: Customer[]
+  onSaveCustomer: (draft: CustomerDraft) => void
+}) {
+  const [search, setSearch] = useState('')
+  const [draft, setDraft] = useState<CustomerDraft>(emptyCustomerDraft())
+  const filteredCustomers = useMemo(
+    () => customers.filter((customer) => customer.name.toLowerCase().includes(search.toLowerCase())).slice(0, compact ? 3 : 6),
+    [compact, customers, search]
+  )
+
+  const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    onSaveCustomer(draft)
+    setDraft(emptyCustomerDraft())
+  }
+
+  return (
+    <section className="panel-card exact-card management-card">
+      <div className="panel-topline">
+        <h3>Customers</h3>
+        <button type="button" onClick={() => setDraft(emptyCustomerDraft())}>
+          New
+        </button>
+      </div>
+      <input className="management-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customers" />
+      <div className="mini-list">
+        {filteredCustomers.map((customer) => (
+          <button key={customer.id} type="button" onClick={() => setDraft(customerToDraft(customer))}>
+            <span>{customer.name}</span>
+            <b>{customer.phone || 'No phone'}</b>
+          </button>
+        ))}
+      </div>
+      <form className="management-form" onSubmit={handleSubmit}>
+        <input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} placeholder="Customer name" />
+        <input value={draft.phone} onChange={(event) => setDraft({ ...draft, phone: event.target.value })} placeholder="Phone" />
+        {!compact && <textarea value={draft.notes} onChange={(event) => setDraft({ ...draft, notes: event.target.value })} placeholder="Notes" />}
+        <button className="mini-save-button" type="submit">
+          <Check size={16} />
+          Save customer
+        </button>
+      </form>
+    </section>
+  )
+}
+
+function RecordDetailPanel({
+  detail,
+  voidReason,
+  onChangeVoidReason,
+  onClose,
+  onCorrect,
+  onVoid
+}: {
+  detail: RecordDetail
+  voidReason: string
+  onChangeVoidReason: (reason: string) => void
+  onClose: () => void
+  onCorrect: () => void
+  onVoid: () => void
+}) {
+  return (
+    <section className="panel-card exact-card record-detail-card">
+      <div className="panel-topline">
+        <h3>{detail.title}</h3>
+        <button type="button" onClick={onClose}>
+          <X size={16} />
+        </button>
+      </div>
+      <div className="record-detail-grid">
+        <span>Status</span>
+        <strong>{detail.status}</strong>
+        <span>Value</span>
+        <strong>{detail.amount}</strong>
+        <span>Evidence</span>
+        <strong>{detail.evidenceCount} attached</strong>
+      </div>
+      <p className="empty-copy">{detail.meta}</p>
+      {detail.isVoid ? (
+        <p className="void-note">
+          <AlertTriangle size={16} />
+          {detail.voidReason || 'This record has been voided.'}
+        </p>
+      ) : (
+        <>
+          <textarea className="void-reason" value={voidReason} onChange={(event) => onChangeVoidReason(event.target.value)} placeholder="Reason for voiding, if needed" />
+          <div className="detail-actions">
+            <button className="upload-button" type="button" onClick={onCorrect}>
+              <Edit3 size={17} />
+              Correct
+            </button>
+            <button className="danger-action" type="button" onClick={onVoid}>
+              <AlertTriangle size={17} />
+              Void
+            </button>
+          </div>
+        </>
+      )}
+    </section>
+  )
+}
+
+function detailFromSale(sale: Sale): RecordDetail {
+  const firstItem = sale.items[0]
+  return {
+    id: sale.id,
+    type: 'sale',
+    title: firstItem?.name || 'Sale record',
+    meta: `${sale.customerName} - ${sale.paymentStatus}`,
+    amount: formatNaira(sale.total),
+    status: sale.isVoid ? 'Voided' : statusLabel(sale.status),
+    evidenceCount: sale.evidenceCount,
+    isVoid: sale.isVoid,
+    voidReason: sale.voidReason,
+    correctionDraft: {
+      type: 'sale',
+      summary: `Correction for sale ${sale.id}`,
+      customerName: sale.customerName,
+      itemName: firstItem?.name.replace(/^\d+(\.\d+)?\s+/, '') || 'Sale item',
+      quantity: String(firstItem?.quantity || 1),
+      unitPrice: String(firstItem?.unitPrice || sale.total),
+      unitCost: String(firstItem?.unitCost || 0),
+      amount: String(sale.total),
+      paidAmount: String(sale.paidAmount),
+      paymentMethod: sale.paymentMethod,
+      expenseCategory: 'Sales',
+      stockUnit: 'items',
+      note: 'Corrected owner-reviewed record.',
+      productId: firstItem?.productId,
+      correctsRecordType: 'sale',
+      correctsRecordId: sale.id
+    }
+  }
+}
+
+function detailFromExpense(expense: Expense): RecordDetail {
+  return {
+    id: expense.id,
+    type: 'expense',
+    title: expense.label,
+    meta: expense.category,
+    amount: formatNaira(expense.amount),
+    status: expense.isVoid ? 'Voided' : statusLabel(expense.status),
+    evidenceCount: expense.evidenceCount,
+    isVoid: expense.isVoid,
+    voidReason: expense.voidReason,
+    correctionDraft: {
+      type: 'expense',
+      summary: `Correction for expense ${expense.id}`,
+      customerName: '',
+      itemName: expense.label,
+      quantity: '1',
+      unitPrice: '',
+      unitCost: '',
+      amount: String(expense.amount),
+      paidAmount: String(expense.amount),
+      paymentMethod: expense.paymentMethod,
+      expenseCategory: expense.category,
+      stockUnit: 'items',
+      note: 'Corrected owner-reviewed record.',
+      correctsRecordType: 'expense',
+      correctsRecordId: expense.id
+    }
+  }
+}
+
+function detailFromDebt(debt: DebtRecord): RecordDetail {
+  return {
+    id: debt.id,
+    type: 'debt',
+    title: debt.customerName,
+    meta: debt.lastActivity,
+    amount: formatNaira(Math.max(debt.amount - debt.paidAmount, 0)),
+    status: debt.isVoid ? 'Voided' : statusLabel(debt.status),
+    evidenceCount: debt.evidenceCount,
+    isVoid: debt.isVoid,
+    voidReason: debt.voidReason,
+    correctionDraft: {
+      type: 'debt',
+      summary: `Correction for debt ${debt.id}`,
+      customerId: debt.customerId,
+      customerName: debt.customerName,
+      itemName: debt.lastActivity,
+      quantity: '1',
+      unitPrice: '',
+      unitCost: '',
+      amount: String(debt.amount),
+      paidAmount: String(debt.paidAmount),
+      paymentMethod: 'credit',
+      expenseCategory: 'Debt',
+      stockUnit: 'items',
+      note: 'Corrected owner-reviewed record.',
+      correctsRecordType: 'debt',
+      correctsRecordId: debt.id
+    }
+  }
+}
+
+function detailFromStock(movement: StockMovement): RecordDetail {
+  return {
+    id: movement.id,
+    type: 'stock',
+    title: movement.productName,
+    meta: movement.note || `${movement.quantity} ${movement.unit}`,
+    amount: formatNaira(movement.quantity * movement.unitCost),
+    status: movement.isVoid ? 'Voided' : statusLabel(movement.status),
+    evidenceCount: movement.evidenceCount,
+    isVoid: movement.isVoid,
+    voidReason: movement.voidReason,
+    correctionDraft: {
+      type: 'stock',
+      summary: `Correction for stock ${movement.id}`,
+      customerName: '',
+      productId: movement.productId,
+      itemName: movement.productName,
+      quantity: String(movement.quantity),
+      unitPrice: '',
+      unitCost: String(movement.unitCost),
+      amount: String(movement.quantity * movement.unitCost),
+      paidAmount: '',
+      paymentMethod: 'transfer',
+      expenseCategory: 'Stock purchase',
+      stockUnit: movement.unit,
+      note: 'Corrected owner-reviewed record.',
+      correctsRecordType: 'stock',
+      correctsRecordId: movement.id
+    }
+  }
+}
+
+function activeSales(sales: Sale[]) {
+  return sales.filter((sale) => !sale.isVoid)
+}
+
+function emptyProductDraft(): ProductDraft {
+  return {
+    name: '',
+    category: 'General',
+    stock: '0',
+    reorderPoint: '5',
+    unit: 'items',
+    unitCost: '0',
+    sellingPrice: '0'
+  }
+}
+
+function productToDraft(product: Product): ProductDraft {
+  return {
+    id: product.id,
+    name: product.name,
+    category: product.category,
+    stock: String(product.stock),
+    reorderPoint: String(product.reorderPoint),
+    unit: product.unit,
+    unitCost: String(product.unitCost),
+    sellingPrice: String(product.sellingPrice)
+  }
+}
+
+function emptyCustomerDraft(): CustomerDraft {
+  return {
+    name: '',
+    phone: '',
+    notes: ''
+  }
+}
+
+function customerToDraft(customer: Customer): CustomerDraft {
+  return {
+    id: customer.id,
+    name: customer.name,
+    phone: customer.phone || '',
+    notes: customer.notes || ''
+  }
 }

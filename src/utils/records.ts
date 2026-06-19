@@ -33,6 +33,7 @@ export function cloneRecords(records: MarketRecords): MarketRecords {
     expenses: records.expenses.map((expense) => ({ ...expense })),
     stockMovements: records.stockMovements.map((movement) => ({ ...movement })),
     evidence: records.evidence.map((evidence) => ({ ...evidence })),
+    scanDrafts: records.scanDrafts.map((draft) => ({ ...draft })),
     activityLog: records.activityLog.map((activity) => ({ ...activity }))
   }
 }
@@ -120,10 +121,13 @@ export function createDraftForKind(type: RecordKind): ReviewEntryDraft {
 }
 
 export function buildDashboardModel(records: MarketRecords): DashboardModel {
-  const salesTotal = records.sales.reduce((total, sale) => total + sale.total, 0)
-  const estimatedProfit = records.sales.reduce((total, sale) => total + sale.profit, 0)
-  const debtsTotal = records.debts.reduce((total, debt) => total + Math.max(debt.amount - debt.paidAmount, 0), 0)
-  const ownerWithdrawalTotal = records.expenses
+  const activeSales = records.sales.filter((sale) => !sale.isVoid)
+  const activeDebts = records.debts.filter((debt) => !debt.isVoid)
+  const activeExpenses = records.expenses.filter((expense) => !expense.isVoid)
+  const salesTotal = activeSales.reduce((total, sale) => total + sale.total, 0)
+  const estimatedProfit = activeSales.reduce((total, sale) => total + sale.profit, 0)
+  const debtsTotal = activeDebts.reduce((total, debt) => total + Math.max(debt.amount - debt.paidAmount, 0), 0)
+  const ownerWithdrawalTotal = activeExpenses
     .filter((expense) => expense.category.toLowerCase().includes('draw') || expense.label.toLowerCase().includes('withdraw'))
     .reduce((total, expense) => total + expense.amount, 0)
 
@@ -144,7 +148,7 @@ export function buildDashboardModel(records: MarketRecords): DashboardModel {
       label: 'Sales',
       value: formatNaira(salesTotal),
       detail: 'saved today',
-      trend: `${records.sales.length} records`,
+      trend: `${activeSales.length} records`,
       tone: 'green'
     },
     {
@@ -182,11 +186,11 @@ export function buildDashboardModel(records: MarketRecords): DashboardModel {
   return {
     metrics,
     stockAlerts,
-    debtRecords: records.debts,
+    debtRecords: activeDebts,
     recentRecords,
     ownerWithdrawalTotal,
     estimatedProfit,
-    draftCount: records.activityLog.filter((activity) => activity.status === 'draft').length
+    draftCount: records.scanDrafts.filter((draft) => draft.status === 'draft').length
   }
 }
 
@@ -228,7 +232,8 @@ export function applyReviewedRecord(records: MarketRecords, draft: ReviewEntryDr
       balanceOwed: balanceOwed || undefined,
       evidenceCount,
       time: formatTime(),
-      createdAt
+      createdAt,
+      isVoid: false
     }
     next.sales.unshift(sale)
 
@@ -245,7 +250,8 @@ export function applyReviewedRecord(records: MarketRecords, draft: ReviewEntryDr
         sinceLabel: 'Owes since today',
         lastActivity: draft.itemName || draft.summary,
         evidenceCount,
-        createdAt
+        createdAt,
+        isVoid: false
       })
     }
 
@@ -266,7 +272,8 @@ export function applyReviewedRecord(records: MarketRecords, draft: ReviewEntryDr
       paymentMethod: draft.paymentMethod,
       evidenceCount,
       time: formatTime(),
-      createdAt
+      createdAt,
+      isVoid: false
     }
     next.expenses.unshift(expense)
     pushEvidence(next, draft, 'expense', expense.id)
@@ -292,7 +299,8 @@ export function applyReviewedRecord(records: MarketRecords, draft: ReviewEntryDr
       movementType: 'in' as const,
       note: draft.note || draft.summary,
       evidenceCount,
-      createdAt
+      createdAt,
+      isVoid: false
     }
     next.stockMovements.unshift(movement)
     pushEvidence(next, draft, 'stock', movement.id)
@@ -312,7 +320,8 @@ export function applyReviewedRecord(records: MarketRecords, draft: ReviewEntryDr
     sinceLabel: 'Owes since today',
     lastActivity: draft.itemName || draft.summary || 'Manual debt record',
     evidenceCount,
-    createdAt
+    createdAt,
+    isVoid: false
   }
   next.debts.unshift(debt)
   pushEvidence(next, draft, 'debt', debt.id)
@@ -386,6 +395,57 @@ function pushActivity(
     status,
     createdAt
   })
+}
+
+export function voidLocalRecord(records: MarketRecords, recordType: RecordKind, recordId: string, reason: string) {
+  const next = cloneRecords(records)
+  const voidedAt = new Date().toISOString()
+
+  const lifecycle = {
+    isVoid: true,
+    voidReason: reason || 'Voided by owner',
+    voidedAt
+  }
+
+  if (recordType === 'sale') {
+    const sale = next.sales.find((record) => record.id === recordId)
+    if (sale && !sale.isVoid) {
+      sale.items.forEach((item) => {
+        const product = next.products.find((candidate) => candidate.id === item.productId)
+        if (product) product.stock += item.quantity
+      })
+      Object.assign(sale, lifecycle)
+      pushActivity(next, 'sale', sale.id, `Sale voided: ${lifecycle.voidReason}`, sale.total, 'recorded', voidedAt)
+    }
+    return next
+  }
+
+  if (recordType === 'expense') {
+    const expense = next.expenses.find((record) => record.id === recordId)
+    if (expense && !expense.isVoid) {
+      Object.assign(expense, lifecycle)
+      pushActivity(next, 'expense', expense.id, `Expense voided: ${lifecycle.voidReason}`, expense.amount, 'recorded', voidedAt)
+    }
+    return next
+  }
+
+  if (recordType === 'stock') {
+    const movement = next.stockMovements.find((record) => record.id === recordId)
+    if (movement && !movement.isVoid) {
+      const product = next.products.find((candidate) => candidate.id === movement.productId)
+      if (product && movement.movementType === 'in') product.stock = Math.max(product.stock - movement.quantity, 0)
+      Object.assign(movement, lifecycle)
+      pushActivity(next, 'stock', movement.id, `Stock record voided: ${lifecycle.voidReason}`, movement.quantity * movement.unitCost, 'recorded', voidedAt)
+    }
+    return next
+  }
+
+  const debt = next.debts.find((record) => record.id === recordId)
+  if (debt && !debt.isVoid) {
+    Object.assign(debt, lifecycle)
+    pushActivity(next, 'debt', debt.id, `Debt voided: ${lifecycle.voidReason}`, debt.amount, 'recorded', voidedAt)
+  }
+  return next
 }
 
 function initialsFor(value: string) {
