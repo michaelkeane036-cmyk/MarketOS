@@ -176,12 +176,14 @@ export default function App() {
 
       const response =
         authMode === 'create'
-          ? await supabase.auth.signUp({
-              email: trimmedEmail,
-              password,
-              options: { data: { full_name: name?.trim() || trimmedEmail.split('@')[0] || business.ownerName } }
-            })
-          : await supabase.auth.signInWithPassword({ email: trimmedEmail, password })
+          ? await withAuthTimeout(
+              supabase.auth.signUp({
+                email: trimmedEmail,
+                password,
+                options: { data: { full_name: name?.trim() || trimmedEmail.split('@')[0] || business.ownerName } }
+              })
+            )
+          : await withAuthTimeout(supabase.auth.signInWithPassword({ email: trimmedEmail, password }))
 
       if (response.error) {
         setAuthMessage(friendlyAuthMessage(response.error.message, authMode))
@@ -244,10 +246,12 @@ export default function App() {
         return
       }
 
-      const { error } = await supabase.auth.resend({
-        type: 'signup',
-        email: trimmedEmail
-      })
+      const { error } = await withAuthTimeout(
+        supabase.auth.resend({
+          type: 'signup',
+          email: trimmedEmail
+        })
+      )
 
       setAuthMessage(error ? friendlyAuthMessage(error.message, 'create') : 'Confirmation email sent again. Check your inbox or spam folder.')
     } catch (error) {
@@ -274,7 +278,7 @@ export default function App() {
     setAuthMessage('')
 
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email)
+      const { error } = await withAuthTimeout(supabase.auth.resetPasswordForEmail(email))
       setAuthMessage(error ? friendlyAuthMessage(error.message, 'login') : 'Password reset email sent. Check your inbox or spam folder.')
     } catch (error) {
       setAuthMessage(friendlyAuthMessage(messageFromError(error), 'login'))
@@ -598,11 +602,28 @@ function messageFromError(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
+function withAuthTimeout<T>(promise: Promise<T>, timeoutMs = 20000) {
+  return Promise.race([
+    promise,
+    new Promise<T>((_resolve, reject) => {
+      window.setTimeout(() => reject(new Error('Auth request timed out. Supabase did not respond quickly enough.')), timeoutMs)
+    })
+  ])
+}
+
 function friendlyAuthMessage(message: string, mode: AuthMode) {
   const lowerMessage = message.toLowerCase()
 
+  if (lowerMessage.includes('timed out')) {
+    return 'Supabase is taking too long to respond. Check your connection, then try again.'
+  }
+
   if (lowerMessage.includes('headers') && lowerMessage.includes('iso-8859-1')) {
     return 'Supabase key problem: the saved API key has a hidden invalid character. Re-save VITE_SUPABASE_ANON_KEY in Vercel, then redeploy.'
+  }
+
+  if (lowerMessage.includes('over_email_send_rate_limit') || lowerMessage.includes('email rate limit exceeded')) {
+    return 'Supabase email limit reached. Wait a little before creating another account, or configure custom SMTP for pilot users.'
   }
 
   if (lowerMessage.includes('failed to fetch') || lowerMessage.includes('fetch failed') || lowerMessage.includes('network')) {
