@@ -1587,6 +1587,13 @@ button:disabled {
   background: #71e4a4;
 }
 
+.auth-mode-note {
+  margin: -0.35rem 0 0.9rem;
+  color: #bfc4c3;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
 .field {
   display: grid;
   gap: 0.42rem;

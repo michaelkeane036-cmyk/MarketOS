@@ -153,6 +153,12 @@ export default function App() {
     setAuthMessage('')
 
     try {
+      const trimmedEmail = email.trim()
+      if (!trimmedEmail || !password) {
+        setAuthMessage('Enter your email and password to continue.')
+        return
+      }
+
       if (!supabase) {
         startDemoSession('Demo mode: Supabase env vars are not connected yet.')
         return
@@ -161,30 +167,35 @@ export default function App() {
       const response =
         authMode === 'create'
           ? await supabase.auth.signUp({
-              email,
+              email: trimmedEmail,
               password,
-              options: { data: { full_name: name || business.ownerName } }
+              options: { data: { full_name: name?.trim() || trimmedEmail.split('@')[0] || business.ownerName } }
             })
-          : await supabase.auth.signInWithPassword({ email, password })
+          : await supabase.auth.signInWithPassword({ email: trimmedEmail, password })
 
       if (response.error) {
-        setAuthMessage(response.error.message)
+        setAuthMessage(friendlyAuthMessage(response.error.message, authMode))
         return
       }
 
-      const user = response.data.user
+      const user = response.data.session?.user
       if (user) {
         setSession({
           provider: 'supabase',
           user: {
             id: user.id,
-            name: user.user_metadata?.full_name || name || user.email?.split('@')[0] || 'MarketOS User',
-            email: user.email || email
+            name: user.user_metadata?.full_name || name?.trim() || user.email?.split('@')[0] || 'MarketOS User',
+            email: user.email || trimmedEmail
           }
         })
         setView('today')
+        return
+      }
+
+      if (authMode === 'create') {
+        setAuthMessage('Account created. Check your email to confirm it, then come back and log in.')
       } else {
-        setAuthMessage('Check your email to confirm this account.')
+        setAuthMessage('Login did not return a session. Confirm your email first, then try again.')
       }
     } finally {
       setIsAuthBusy(false)
@@ -515,6 +526,28 @@ export default function App() {
 
 function messageFromError(error: unknown) {
   return error instanceof Error ? error.message : String(error)
+}
+
+function friendlyAuthMessage(message: string, mode: AuthMode) {
+  const lowerMessage = message.toLowerCase()
+
+  if (lowerMessage.includes('invalid login credentials')) {
+    return 'Could not log in with those details. Create an account first, confirm your email, or reset your password.'
+  }
+
+  if (lowerMessage.includes('email not confirmed')) {
+    return 'This email is not confirmed yet. Check your inbox, confirm it, then log in again.'
+  }
+
+  if (lowerMessage.includes('already registered') || lowerMessage.includes('already exists')) {
+    return 'This email already has an account. Switch to Log in or reset the password.'
+  }
+
+  if (lowerMessage.includes('password')) {
+    return mode === 'create' ? 'Use a stronger password with at least 6 characters.' : message
+  }
+
+  return message
 }
 
 function createDraftForReview(type: RecordKind): ReviewEntryDraft {

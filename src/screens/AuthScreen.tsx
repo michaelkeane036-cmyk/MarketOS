@@ -22,9 +22,9 @@ export default function AuthScreen({
   onModeChange,
   onPasswordReset
 }: AuthScreenProps) {
-  const [name, setName] = useState('Ayo')
-  const [email, setEmail] = useState('ayo@marketos.demo')
-  const [password, setPassword] = useState('marketos-demo')
+  const [name, setName] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
 
   const isCreate = authMode === 'create'
@@ -59,6 +59,9 @@ export default function AuthScreen({
               Create account
             </button>
           </div>
+          <p className="auth-mode-note">
+            {isCreate ? 'New users should create an account first. You may need to confirm your email before logging in.' : 'Already created an account? Log in with the email and password you used.'}
+          </p>
 
           <form onSubmit={handleSubmit}>
             {isCreate && (
