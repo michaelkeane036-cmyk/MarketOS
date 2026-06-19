@@ -601,6 +601,10 @@ function messageFromError(error: unknown) {
 function friendlyAuthMessage(message: string, mode: AuthMode) {
   const lowerMessage = message.toLowerCase()
 
+  if (lowerMessage.includes('headers') && lowerMessage.includes('iso-8859-1')) {
+    return 'Supabase key problem: the saved API key has a hidden invalid character. Re-save VITE_SUPABASE_ANON_KEY in Vercel, then redeploy.'
+  }
+
   if (lowerMessage.includes('failed to fetch') || lowerMessage.includes('fetch failed') || lowerMessage.includes('network')) {
     return 'Network problem. Check your internet connection and try again.'
   }
