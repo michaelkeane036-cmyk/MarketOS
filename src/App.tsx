@@ -392,6 +392,16 @@ export default function App() {
     setView('record')
   }
 
+  const handleStartCustomerRecord = (type: Extract<RecordKind, 'sale' | 'debt'>, customerName: string, customerId?: string) => {
+    setRecordType(type)
+    setRecordInitialDraft({
+      ...createDraftForKind(type),
+      customerId,
+      customerName
+    })
+    setView('record')
+  }
+
   if (!session) {
     return (
       <AuthScreen
@@ -476,6 +486,7 @@ export default function App() {
         ownerWithdrawalTotal={dashboard.ownerWithdrawalTotal}
         products={records.products}
         recentRecords={dashboard.recentRecords}
+        records={records}
         sales={records.sales}
         scanDrafts={records.scanDrafts}
         session={session}
@@ -490,6 +501,7 @@ export default function App() {
         onScan={() => setView('scan')}
         onSaveCustomer={(draft) => void handleSaveCustomer(draft)}
         onSaveProduct={(draft) => void handleSaveProduct(draft)}
+        onStartCustomerRecord={handleStartCustomerRecord}
         onStartRecord={handleStartRecord}
         onVoidRecord={(type, id, reason) => void handleVoidRecord(type, id, reason)}
       />

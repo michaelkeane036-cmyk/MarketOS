@@ -217,6 +217,16 @@ export interface CustomerDraft {
   notes: string
 }
 
+export interface ValidationIssue {
+  field: string
+  message: string
+}
+
+export interface ValidationResult {
+  valid: boolean
+  issues: ValidationIssue[]
+}
+
 export interface StockMovement extends RecordLifecycle {
   id: string
   status: RecordStatus
@@ -259,6 +269,48 @@ export interface RecentRecord {
   tone: MetricTone
   avatar: string
   status: RecordStatus
+}
+
+export interface CustomerLedgerEntry {
+  id: string
+  type: RecordKind
+  title: string
+  meta: string
+  amount: number
+  status: RecordStatus
+  isVoid: boolean
+  createdAt: string
+}
+
+export interface CustomerLedger {
+  customer: Customer
+  totalSales: number
+  outstandingBalance: number
+  evidenceCount: number
+  entries: CustomerLedgerEntry[]
+  reminderText: string
+}
+
+export interface PaymentBreakdown {
+  cash: number
+  transfer: number
+  pos: number
+  credit: number
+}
+
+export interface DailyCloseout {
+  businessName: string
+  dateLabel: string
+  salesTotal: number
+  estimatedProfit: number
+  expensesTotal: number
+  ownerWithdrawalTotal: number
+  stockAddedValue: number
+  debtsCreated: number
+  draftCount: number
+  paymentBreakdown: PaymentBreakdown
+  lowStockCount: number
+  warnings: string[]
 }
 
 export interface MarketRecords {

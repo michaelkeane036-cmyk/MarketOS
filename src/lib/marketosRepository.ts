@@ -2,6 +2,7 @@ import { business as defaultBusiness, emptyRecords } from '../data/mockData'
 import { supabase } from './supabase'
 import { applyReviewedRecord, cloneRecords, createDraftForKind, voidLocalRecord } from '../utils/records'
 import { formatTime, parseMoney } from '../utils/format'
+import { issueMessages, validateCustomerDraft, validateProductDraft, validateReviewEntry } from '../utils/validation'
 import type {
   BusinessProfile,
   BusinessSetupDraft,
@@ -246,6 +247,7 @@ export async function createBusinessWorkspace(setup: BusinessSetupDraft, userId:
 
 export async function saveReviewedRecordToSupabase(input: SaveRecordInput): Promise<void> {
   assertSupabase()
+  assertValid('record', validateReviewEntry(input.entry))
 
   const payload = await buildSavePayload(input)
   const { error } = await supabase!.rpc('marketos_save_reviewed_record', {
@@ -271,6 +273,7 @@ export async function voidRecordInSupabase(businessId: string, recordType: Recor
 
 export async function saveProductToSupabase(businessId: string, draft: ProductDraft): Promise<void> {
   assertSupabase()
+  assertValid('product', validateProductDraft(draft))
 
   const payload = {
     business_id: businessId,
@@ -294,6 +297,7 @@ export async function saveProductToSupabase(businessId: string, draft: ProductDr
 
 export async function saveCustomerToSupabase(businessId: string, draft: CustomerDraft): Promise<void> {
   assertSupabase()
+  assertValid('customer', validateCustomerDraft(draft))
 
   const payload = {
     business_id: businessId,
@@ -674,6 +678,7 @@ function assertSupabase() {
 }
 
 export function applyLocalRecord(records: MarketRecords, entry: ReviewEntryDraft, source: 'manual' | 'scan') {
+  assertValid('record', validateReviewEntry(entry))
   return applyReviewedRecord(records, entry, source)
 }
 
@@ -682,6 +687,7 @@ export function applyLocalVoid(records: MarketRecords, recordType: RecordKind, r
 }
 
 export function applyLocalProduct(records: MarketRecords, draft: ProductDraft) {
+  assertValid('product', validateProductDraft(draft))
   const next = cloneRecords(records)
   const product: Product = {
     id: draft.id || `product-${Date.now()}`,
@@ -701,6 +707,7 @@ export function applyLocalProduct(records: MarketRecords, draft: ProductDraft) {
 }
 
 export function applyLocalCustomer(records: MarketRecords, draft: CustomerDraft) {
+  assertValid('customer', validateCustomerDraft(draft))
   const next = cloneRecords(records)
   const customer: Customer = {
     id: draft.id || `customer-${Date.now()}`,
@@ -713,4 +720,8 @@ export function applyLocalCustomer(records: MarketRecords, draft: CustomerDraft)
   if (existingIndex >= 0) next.customers[existingIndex] = customer
   else next.customers.unshift(customer)
   return next
+}
+
+function assertValid(label: string, result: ReturnType<typeof validateReviewEntry>) {
+  if (!result.valid) throw new Error(`Invalid ${label}: ${issueMessages(result).join(' ')}`)
 }

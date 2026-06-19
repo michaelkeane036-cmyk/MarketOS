@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ArrowLeft, Banknote, Check, CreditCard, PencilLine, ShieldCheck, UserPlus } from 'lucide-react'
 import type { PaymentMethod, RecordKind, ReviewEntryDraft, ScanDraft } from '../types'
+import { issueMessages, validateReviewEntry } from '../utils/validation'
 
 interface ReviewScreenProps {
   draft: ScanDraft
@@ -24,6 +25,17 @@ const paymentMethods: Array<{ value: PaymentMethod; label: string }> = [
 
 export default function ReviewScreen({ draft, onBack, onSave }: ReviewScreenProps) {
   const [entry, setEntry] = useState<ReviewEntryDraft>(() => ({ ...draft.entry, evidence: draft.image }))
+  const [errors, setErrors] = useState<string[]>([])
+
+  const handleSave = () => {
+    const validation = validateReviewEntry(entry)
+    if (!validation.valid) {
+      setErrors(issueMessages(validation))
+      return
+    }
+    setErrors([])
+    onSave(entry)
+  }
 
   return (
     <div className="app-shell">
@@ -45,6 +57,14 @@ export default function ReviewScreen({ draft, onBack, onSave }: ReviewScreenProp
             <PencilLine size={22} />
             <strong>Evidence attached draft</strong>
           </div>
+
+          {errors.length > 0 && (
+            <div className="form-errors" role="alert">
+              {errors.map((error) => (
+                <span key={error}>{error}</span>
+              ))}
+            </div>
+          )}
 
           <label className="field">
             <span>Record type</span>
@@ -140,7 +160,7 @@ export default function ReviewScreen({ draft, onBack, onSave }: ReviewScreenProp
           Review is mandatory because OCR/AI is not connected yet.
         </p>
 
-        <button className="primary-action save-review-button" type="button" onClick={() => onSave(entry)}>
+        <button className="primary-action save-review-button" type="button" onClick={handleSave}>
           <Check size={20} />
           Save as evidence-attached record
         </button>

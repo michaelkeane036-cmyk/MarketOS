@@ -314,6 +314,59 @@ create index if not exists evidence_business_record_idx on public.transaction_ev
 create index if not exists scan_drafts_business_status_idx on public.scan_drafts (business_id, status, created_at desc);
 create index if not exists activity_log_business_created_idx on public.activity_log (business_id, created_at desc);
 
+do $$
+begin
+  if not exists (select 1 from pg_constraint where conname = 'marketos_customers_name_required') then
+    alter table public.customers add constraint marketos_customers_name_required check (length(trim(name)) > 0);
+  end if;
+
+  if not exists (select 1 from pg_constraint where conname = 'marketos_products_valid_values') then
+    alter table public.products add constraint marketos_products_valid_values check (
+      length(trim(name)) > 0
+      and stock >= 0
+      and reorder_point >= 0
+      and unit_cost >= 0
+      and selling_price >= 0
+      and length(trim(unit)) > 0
+    );
+  end if;
+
+  if not exists (select 1 from pg_constraint where conname = 'marketos_sales_valid_values') then
+    alter table public.sales add constraint marketos_sales_valid_values check (
+      total >= 0
+      and profit >= 0
+      and paid_amount >= 0
+      and balance_owed >= 0
+      and paid_amount <= total
+    );
+  end if;
+
+  if not exists (select 1 from pg_constraint where conname = 'marketos_expenses_valid_values') then
+    alter table public.expenses add constraint marketos_expenses_valid_values check (
+      length(trim(label)) > 0
+      and amount >= 0
+    );
+  end if;
+
+  if not exists (select 1 from pg_constraint where conname = 'marketos_debts_valid_values') then
+    alter table public.debts add constraint marketos_debts_valid_values check (
+      length(trim(customer_name)) > 0
+      and amount >= 0
+      and paid_amount >= 0
+      and paid_amount <= amount
+    );
+  end if;
+
+  if not exists (select 1 from pg_constraint where conname = 'marketos_stock_movements_valid_values') then
+    alter table public.stock_movements add constraint marketos_stock_movements_valid_values check (
+      length(trim(product_name)) > 0
+      and quantity >= 0
+      and unit_cost >= 0
+      and length(trim(unit)) > 0
+    );
+  end if;
+end $$;
+
 create or replace function public.marketos_touch_updated_at()
 returns trigger
 language plpgsql
@@ -622,6 +675,44 @@ begin
     v_corrects_id := (payload ->> 'correctsRecordId')::uuid;
   end if;
 
+  if nullif(trim(coalesce(payload ->> 'summary', '')), '') is null then
+    raise exception 'A record summary is required.';
+  end if;
+
+  if v_kind in ('sale', 'stock') and nullif(trim(coalesce(payload ->> 'itemName', '')), '') is null then
+    raise exception 'Product or item name is required.';
+  end if;
+
+  if v_kind = 'debt' and (
+    nullif(trim(v_customer_name), '') is null
+    or lower(trim(v_customer_name)) = 'walk-in customer'
+  ) then
+    raise exception 'A debt record requires a named customer.';
+  end if;
+
+  if v_kind in ('sale', 'stock') and v_quantity <= 0 then
+    raise exception 'Quantity must be greater than zero.';
+  end if;
+
+  if v_kind in ('sale', 'stock') and v_unit_cost < 0 then
+    raise exception 'Unit cost cannot be negative.';
+  end if;
+
+  if v_kind = 'expense' and (
+    nullif(trim(coalesce(payload ->> 'itemName', '')), '') is null
+    and nullif(trim(coalesce(payload ->> 'summary', '')), '') is null
+  ) then
+    raise exception 'Expense label is required.';
+  end if;
+
+  if v_kind in ('expense', 'debt') and v_amount <= 0 then
+    raise exception 'Amount must be greater than zero.';
+  end if;
+
+  if public.marketos_payload_number(payload, 'paidAmount', 0) < 0 then
+    raise exception 'Paid amount cannot be negative.';
+  end if;
+
   if nullif(payload ->> 'customerId', '') is not null then
     v_customer_id := (payload ->> 'customerId')::uuid;
   elsif lower(v_customer_name) not in ('walk-in customer', 'customer') then
@@ -685,10 +776,18 @@ begin
       v_total := v_amount;
     end if;
 
+    if v_total <= 0 then
+      raise exception 'Sale amount must be greater than zero.';
+    end if;
+
     if coalesce(nullif(payload ->> 'paidAmount', ''), '') = '' then
       v_paid_amount := v_total;
     else
       v_paid_amount := least(public.marketos_payload_number(payload, 'paidAmount', 0), v_total);
+    end if;
+
+    if public.marketos_payload_number(payload, 'paidAmount', 0) > v_total then
+      raise exception 'Paid amount cannot be greater than sale total.';
     end if;
 
     v_balance_owed := greatest(v_total - v_paid_amount, 0);
@@ -840,6 +939,10 @@ begin
     insert into public.activity_log (business_id, actor_id, action, record_type, record_id, message, amount, record_status)
     values (target_business_id, v_actor, 'record_saved', 'stock', v_record_id, 'Stock added: ' || v_product_name, v_quantity * v_unit_cost, v_status);
   else
+    if public.marketos_payload_number(payload, 'paidAmount', 0) > v_amount then
+      raise exception 'Paid amount cannot be greater than debt amount.';
+    end if;
+
     insert into public.debts (
       business_id,
       customer_id,

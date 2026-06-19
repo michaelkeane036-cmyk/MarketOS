@@ -23,7 +23,9 @@ import { FormEvent, ReactNode, useMemo, useState } from 'react'
 import AppBottomNav, { type MainTab } from '../components/AppBottomNav'
 import StatusRow from '../components/StatusRow'
 import { formatNaira } from '../utils/format'
+import { buildCustomerLedger, buildDailyCloseout, buildWhatsAppCloseoutText } from '../utils/businessInsights'
 import { statusLabel } from '../utils/records'
+import { issueMessages, validateCustomerDraft, validateProductDraft } from '../utils/validation'
 import type {
   AuthSession,
   BusinessProfile,
@@ -31,6 +33,7 @@ import type {
   CustomerDraft,
   DebtRecord,
   Expense,
+  MarketRecords,
   PersistedScanDraft,
   Product,
   ProductDraft,
@@ -60,6 +63,7 @@ interface WorkspaceScreenProps {
   session: AuthSession
   stockAlerts: StockAlert[]
   stockMovements: StockMovement[]
+  records: MarketRecords
   view: WorkspaceView
   onCorrectRecord: (type: RecordKind, draft: ReviewEntryDraft) => void
   onLogout: () => void
@@ -68,6 +72,7 @@ interface WorkspaceScreenProps {
   onSaveCustomer: (draft: CustomerDraft) => void
   onSaveProduct: (draft: ProductDraft) => void
   onScan: () => void
+  onStartCustomerRecord: (type: Extract<RecordKind, 'sale' | 'debt'>, customerName: string, customerId?: string) => void
   onStartRecord: (type: RecordKind) => void
   onVoidRecord: (type: RecordKind, id: string, reason: string) => void
 }
@@ -96,6 +101,7 @@ export default function WorkspaceScreen({
   ownerWithdrawalTotal,
   products,
   recentRecords,
+  records,
   sales,
   scanDrafts,
   session,
@@ -109,13 +115,19 @@ export default function WorkspaceScreen({
   onSaveCustomer,
   onSaveProduct,
   onScan,
+  onStartCustomerRecord,
   onStartRecord,
   onVoidRecord
 }: WorkspaceScreenProps) {
   const [selectedRecord, setSelectedRecord] = useState<RecordDetail | null>(null)
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | null>(null)
+  const [shareMessage, setShareMessage] = useState('')
   const [voidReason, setVoidReason] = useState('')
   const navActive: MainTab = view === 'notifications' || view === 'account' ? 'today' : view
   const activeScanDrafts = scanDrafts.filter((draft) => draft.status === 'draft')
+  const closeout = useMemo(() => buildDailyCloseout(records, business), [business, records])
+  const selectedCustomer = selectedCustomerId ? customers.find((customer) => customer.id === selectedCustomerId) : undefined
+  const selectedLedger = selectedCustomer ? buildCustomerLedger(selectedCustomer, records) : null
 
   const handleVoid = () => {
     if (!selectedRecord) return
@@ -127,6 +139,21 @@ export default function WorkspaceScreen({
   const handleCorrect = () => {
     if (!selectedRecord) return
     onCorrectRecord(selectedRecord.type, selectedRecord.correctionDraft)
+  }
+
+  const handleShareCloseout = async () => {
+    const text = buildWhatsAppCloseoutText(closeout)
+    try {
+      if (navigator.share) {
+        await navigator.share({ text, title: `${business.name} Daily Summary` })
+        setShareMessage('Summary shared.')
+        return
+      }
+      await navigator.clipboard.writeText(text)
+      setShareMessage('Summary copied for WhatsApp.')
+    } catch {
+      setShareMessage('Could not share automatically. Copy is available in the summary card.')
+    }
   }
 
   return (
@@ -147,7 +174,19 @@ export default function WorkspaceScreen({
                 Scan Receipt
               </button>
             </div>
-            <CustomerManager customers={customers} onSaveCustomer={onSaveCustomer} compact />
+            <CustomerManager customers={customers} onSaveCustomer={onSaveCustomer} onSelectCustomer={setSelectedCustomerId} compact />
+            {selectedLedger && (
+              <CustomerLedgerPanel
+                ledger={selectedLedger}
+                onClose={() => setSelectedCustomerId(null)}
+                onCopyReminder={(message) => {
+                  void navigator.clipboard.writeText(message)
+                  setShareMessage('Reminder copied.')
+                }}
+                onRecordDebt={() => onStartCustomerRecord('debt', selectedLedger.customer.name, selectedLedger.customer.id)}
+                onRecordSale={() => onStartCustomerRecord('sale', selectedLedger.customer.name, selectedLedger.customer.id)}
+              />
+            )}
             <RecordPanel title="Recent Sales" actionLabel="Review">
               {sales.length ? (
                 sales.slice(0, 10).map((sale) => (
@@ -222,7 +261,19 @@ export default function WorkspaceScreen({
                 Send Reminders
               </button>
             </div>
-            <CustomerManager customers={customers} onSaveCustomer={onSaveCustomer} />
+            <CustomerManager customers={customers} onSaveCustomer={onSaveCustomer} onSelectCustomer={setSelectedCustomerId} />
+            {selectedLedger && (
+              <CustomerLedgerPanel
+                ledger={selectedLedger}
+                onClose={() => setSelectedCustomerId(null)}
+                onCopyReminder={(message) => {
+                  void navigator.clipboard.writeText(message)
+                  setShareMessage('Reminder copied.')
+                }}
+                onRecordDebt={() => onStartCustomerRecord('debt', selectedLedger.customer.name, selectedLedger.customer.id)}
+                onRecordSale={() => onStartCustomerRecord('sale', selectedLedger.customer.name, selectedLedger.customer.id)}
+              />
+            )}
             <RecordPanel title="Customers Owing" actionLabel="Follow up">
               {debtRecords.length ? (
                 debtRecords.map((debt) => (
@@ -261,6 +312,7 @@ export default function WorkspaceScreen({
               </div>
               <ChevronRight size={24} />
             </section>
+            <DailyCloseoutPanel closeout={closeout} shareMessage={shareMessage} onShare={handleShareCloseout} />
             <RecordPanel title="Expenses" actionLabel="Add">
               {expenses.length ? (
                 expenses.slice(0, 8).map((expense) => (
@@ -404,6 +456,7 @@ function RecordPanel({ actionLabel, children, title }: { actionLabel: string; ch
 function ProductManager({ products, onSaveProduct }: { products: Product[]; onSaveProduct: (draft: ProductDraft) => void }) {
   const [search, setSearch] = useState('')
   const [draft, setDraft] = useState<ProductDraft>(emptyProductDraft())
+  const [errors, setErrors] = useState<string[]>([])
   const filteredProducts = useMemo(
     () => products.filter((product) => product.name.toLowerCase().includes(search.toLowerCase())).slice(0, 6),
     [products, search]
@@ -411,6 +464,12 @@ function ProductManager({ products, onSaveProduct }: { products: Product[]; onSa
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    const validation = validateProductDraft(draft)
+    if (!validation.valid) {
+      setErrors(issueMessages(validation))
+      return
+    }
+    setErrors([])
     onSaveProduct(draft)
     setDraft(emptyProductDraft())
   }
@@ -423,6 +482,13 @@ function ProductManager({ products, onSaveProduct }: { products: Product[]; onSa
           New
         </button>
       </div>
+      {errors.length > 0 && (
+        <div className="form-errors compact-errors" role="alert">
+          {errors.map((error) => (
+            <span key={error}>{error}</span>
+          ))}
+        </div>
+      )}
       <input className="management-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search products" />
       <div className="mini-list">
         {filteredProducts.map((product) => (
@@ -458,14 +524,17 @@ function ProductManager({ products, onSaveProduct }: { products: Product[]; onSa
 function CustomerManager({
   compact,
   customers,
-  onSaveCustomer
+  onSaveCustomer,
+  onSelectCustomer
 }: {
   compact?: boolean
   customers: Customer[]
   onSaveCustomer: (draft: CustomerDraft) => void
+  onSelectCustomer: (customerId: string) => void
 }) {
   const [search, setSearch] = useState('')
   const [draft, setDraft] = useState<CustomerDraft>(emptyCustomerDraft())
+  const [errors, setErrors] = useState<string[]>([])
   const filteredCustomers = useMemo(
     () => customers.filter((customer) => customer.name.toLowerCase().includes(search.toLowerCase())).slice(0, compact ? 3 : 6),
     [compact, customers, search]
@@ -473,6 +542,12 @@ function CustomerManager({
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    const validation = validateCustomerDraft(draft)
+    if (!validation.valid) {
+      setErrors(issueMessages(validation))
+      return
+    }
+    setErrors([])
     onSaveCustomer(draft)
     setDraft(emptyCustomerDraft())
   }
@@ -485,10 +560,17 @@ function CustomerManager({
           New
         </button>
       </div>
+      {errors.length > 0 && (
+        <div className="form-errors compact-errors" role="alert">
+          {errors.map((error) => (
+            <span key={error}>{error}</span>
+          ))}
+        </div>
+      )}
       <input className="management-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customers" />
       <div className="mini-list">
         {filteredCustomers.map((customer) => (
-          <button key={customer.id} type="button" onClick={() => setDraft(customerToDraft(customer))}>
+          <button key={customer.id} type="button" onClick={() => onSelectCustomer(customer.id)}>
             <span>{customer.name}</span>
             <b>{customer.phone || 'No phone'}</b>
           </button>
@@ -503,6 +585,132 @@ function CustomerManager({
           Save customer
         </button>
       </form>
+    </section>
+  )
+}
+
+function CustomerLedgerPanel({
+  ledger,
+  onClose,
+  onCopyReminder,
+  onRecordDebt,
+  onRecordSale
+}: {
+  ledger: import('../types').CustomerLedger
+  onClose: () => void
+  onCopyReminder: (message: string) => void
+  onRecordDebt: () => void
+  onRecordSale: () => void
+}) {
+  return (
+    <section className="panel-card exact-card ledger-card">
+      <div className="panel-topline">
+        <h3>{ledger.customer.name}</h3>
+        <button type="button" onClick={onClose}>
+          <X size={16} />
+        </button>
+      </div>
+      <div className="ledger-metrics">
+        <span>
+          <b>{formatNaira(ledger.outstandingBalance)}</b>
+          Outstanding
+        </span>
+        <span>
+          <b>{formatNaira(ledger.totalSales)}</b>
+          Sales
+        </span>
+        <span>
+          <b>{ledger.evidenceCount}</b>
+          Evidence
+        </span>
+      </div>
+      <div className="detail-actions">
+        <button className="upload-button" type="button" onClick={onRecordSale}>
+          <ShoppingCart size={17} />
+          Sale
+        </button>
+        <button className="upload-button" type="button" onClick={onRecordDebt}>
+          <UserPlus size={17} />
+          Debt
+        </button>
+      </div>
+      <button className="outline-action green-outline" type="button" onClick={() => onCopyReminder(ledger.reminderText)}>
+        <MessageCircle size={17} />
+        Copy Reminder
+        <ChevronRight size={17} />
+      </button>
+      <div className="ledger-list">
+        {ledger.entries.length ? (
+          ledger.entries.slice(0, 6).map((entry) => (
+            <div key={`${entry.type}-${entry.id}`} className="ledger-entry">
+              <span>{entry.title}</span>
+              <b>{formatNaira(entry.amount)}</b>
+              <small>{entry.meta}</small>
+            </div>
+          ))
+        ) : (
+          <p className="empty-copy">No history for this customer yet.</p>
+        )}
+      </div>
+    </section>
+  )
+}
+
+function DailyCloseoutPanel({
+  closeout,
+  onShare,
+  shareMessage
+}: {
+  closeout: import('../types').DailyCloseout
+  onShare: () => void
+  shareMessage: string
+}) {
+  const shareText = buildWhatsAppCloseoutText(closeout)
+
+  return (
+    <section className="panel-card exact-card closeout-card">
+      <div className="panel-topline">
+        <h3>Close Today</h3>
+        <button type="button" onClick={onShare}>
+          Share
+        </button>
+      </div>
+      <div className="closeout-grid">
+        <span>
+          <b>{formatNaira(closeout.salesTotal)}</b>
+          Sales
+        </span>
+        <span>
+          <b>{formatNaira(closeout.estimatedProfit)}</b>
+          Profit
+        </span>
+        <span>
+          <b>{formatNaira(closeout.expensesTotal)}</b>
+          Expenses
+        </span>
+        <span>
+          <b>{formatNaira(closeout.debtsCreated)}</b>
+          New debt
+        </span>
+      </div>
+      <div className="payment-breakdown">
+        <span>Cash {formatNaira(closeout.paymentBreakdown.cash)}</span>
+        <span>Transfer {formatNaira(closeout.paymentBreakdown.transfer)}</span>
+        <span>POS {formatNaira(closeout.paymentBreakdown.pos)}</span>
+        <span>Credit {formatNaira(closeout.paymentBreakdown.credit)}</span>
+      </div>
+      {closeout.warnings.length > 0 && (
+        <div className="closeout-warnings">
+          {closeout.warnings.map((warning) => (
+            <span key={warning}>
+              <AlertTriangle size={14} />
+              {warning}
+            </span>
+          ))}
+        </div>
+      )}
+      <textarea className="share-preview" readOnly value={shareText} />
+      {shareMessage && <p className="auth-message">{shareMessage}</p>}
     </section>
   )
 }

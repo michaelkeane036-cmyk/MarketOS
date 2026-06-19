@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import type { CapturedImage, Customer, PaymentMethod, Product, RecordKind, ReviewEntryDraft } from '../types'
 import { createDraftForKind } from '../utils/records'
+import { issueMessages, validateReviewEntry } from '../utils/validation'
 
 interface RecordEntryScreenProps {
   type: RecordKind
@@ -65,11 +66,18 @@ export default function RecordEntryScreen({
   onSave
 }: RecordEntryScreenProps) {
   const [entry, setEntry] = useState<ReviewEntryDraft>(() => initialDraft ?? createDraftForKind(type))
+  const [errors, setErrors] = useState<string[]>([])
   const meta = recordMeta[type]
   const Icon = meta.icon
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    const validation = validateReviewEntry(entry)
+    if (!validation.valid) {
+      setErrors(issueMessages(validation))
+      return
+    }
+    setErrors([])
     onSave(entry)
   }
 
@@ -142,6 +150,14 @@ export default function RecordEntryScreen({
             <p className="correction-note">
               This will keep the original in history, void it as corrected, and save this replacement.
             </p>
+          )}
+
+          {errors.length > 0 && (
+            <div className="form-errors" role="alert">
+              {errors.map((error) => (
+                <span key={error}>{error}</span>
+              ))}
+            </div>
           )}
 
           <label className="field">
