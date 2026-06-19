@@ -1,4 +1,4 @@
-const CACHE_NAME = 'marketos-pwa-v1'
+const CACHE_NAME = 'marketos-pwa-v2'
 const CORE_ASSETS = [
   '/',
   '/offline.html',
@@ -26,6 +26,10 @@ self.addEventListener('activate', (event) => {
       .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
       .then(() => self.clients.claim())
   )
+})
+
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting()
 })
 
 self.addEventListener('fetch', (event) => {

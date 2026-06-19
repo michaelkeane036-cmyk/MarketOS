@@ -8,7 +8,6 @@ import {
   Edit3,
   LogOut,
   MessageCircle,
-  PackagePlus,
   Plus,
   ScanLine,
   ShieldCheck,
@@ -965,14 +964,5 @@ function emptyCustomerDraft(): CustomerDraft {
     name: '',
     phone: '',
     notes: ''
-  }
-}
-
-function customerToDraft(customer: Customer): CustomerDraft {
-  return {
-    id: customer.id,
-    name: customer.name,
-    phone: customer.phone || '',
-    notes: customer.notes || ''
   }
 }

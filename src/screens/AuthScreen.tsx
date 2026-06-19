@@ -36,9 +36,12 @@ export default function AuthScreen({
   const [showPassword, setShowPassword] = useState(false)
 
   const isCreate = authMode === 'create'
+  const authNotice = message || (isPreviewAuth ? 'Preview mode: auth uses a demo session until Supabase env vars are added.' : '')
+  const authNoticeTone = getAuthNoticeTone(authNotice, Boolean(confirmationEmail))
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
+    if (isBusy) return
     void onEmailAuth(email, password, name)
   }
 
@@ -66,6 +69,7 @@ export default function AuthScreen({
               <p>
                 We sent a confirmation email to <strong>{confirmationEmail}</strong>. Confirm it, then return here and log in.
               </p>
+              {authNotice && <AuthNotice text={authNotice} tone={authNoticeTone} />}
               <button className="primary-action auth-submit" disabled={isBusy} type="button" onClick={onBackToLogin}>
                 Back to log in
                 <ArrowRight size={18} />
@@ -90,6 +94,7 @@ export default function AuthScreen({
               <p className="auth-mode-note">
                 {isCreate ? 'New users should create an account first. You may need to confirm your email before logging in.' : 'Already created an account? Log in with the email and password you used.'}
               </p>
+              {authNotice && <AuthNotice text={authNotice} tone={authNoticeTone} />}
 
               <form onSubmit={handleSubmit}>
                 {isCreate && (
@@ -145,15 +150,47 @@ export default function AuthScreen({
               </button>
             </>
           )}
-
-          {(message || isPreviewAuth) && (
-            <p className="auth-message">
-              {message || 'Preview mode: auth uses a demo session until Supabase env vars are added.'}
-            </p>
-          )}
         </section>
         <InstallPrompt />
       </main>
     </div>
   )
+}
+
+function AuthNotice({ text, tone }: { text: string; tone: 'error' | 'info' | 'success' }) {
+  return (
+    <p className={`auth-message auth-message-${tone}`} role={tone === 'error' ? 'alert' : 'status'} aria-live="polite">
+      {text}
+    </p>
+  )
+}
+
+function getAuthNoticeTone(text: string, isConfirmation: boolean): 'error' | 'info' | 'success' {
+  const normalized = text.toLowerCase()
+
+  if (
+    normalized.includes('could not') ||
+    normalized.includes('invalid') ||
+    normalized.includes('failed') ||
+    normalized.includes('problem') ||
+    normalized.includes('not confirmed') ||
+    normalized.includes('stronger password') ||
+    normalized.includes('already has') ||
+    normalized.includes('too many') ||
+    normalized.startsWith('enter ')
+  ) {
+    return 'error'
+  }
+
+  if (
+    isConfirmation ||
+    normalized.includes('created') ||
+    normalized.includes('sent') ||
+    normalized.includes('confirmed already') ||
+    normalized.includes('reset email')
+  ) {
+    return 'success'
+  }
+
+  return 'info'
 }

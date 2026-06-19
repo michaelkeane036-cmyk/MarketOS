@@ -156,6 +156,8 @@ export default function App() {
   }
 
   const handleEmailAuth = async (email: string, password: string, name?: string) => {
+    if (isAuthBusy) return
+
     setIsAuthBusy(true)
     setAuthMessage('')
     setConfirmationEmail('')
@@ -206,6 +208,8 @@ export default function App() {
       } else {
         setAuthMessage('Login did not return a session. Confirm your email first, then try again.')
       }
+    } catch (error) {
+      setAuthMessage(friendlyAuthMessage(messageFromError(error), authMode))
     } finally {
       setIsAuthBusy(false)
     }
@@ -223,6 +227,8 @@ export default function App() {
   }
 
   const handleResendConfirmation = async (email: string) => {
+    if (isAuthBusy) return
+
     const trimmedEmail = email.trim()
     if (!trimmedEmail) {
       setAuthMessage('Enter your email first, then resend confirmation.')
@@ -244,12 +250,16 @@ export default function App() {
       })
 
       setAuthMessage(error ? friendlyAuthMessage(error.message, 'create') : 'Confirmation email sent again. Check your inbox or spam folder.')
+    } catch (error) {
+      setAuthMessage(friendlyAuthMessage(messageFromError(error), 'create'))
     } finally {
       setIsAuthBusy(false)
     }
   }
 
   const handlePasswordReset = async (email: string) => {
+    if (isAuthBusy) return
+
     if (!email) {
       setAuthMessage('Enter your email first, then request the reset link.')
       return
@@ -260,8 +270,17 @@ export default function App() {
       return
     }
 
-    const { error } = await supabase.auth.resetPasswordForEmail(email)
-    setAuthMessage(error ? error.message : 'Password reset email sent.')
+    setIsAuthBusy(true)
+    setAuthMessage('')
+
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email)
+      setAuthMessage(error ? friendlyAuthMessage(error.message, 'login') : 'Password reset email sent. Check your inbox or spam folder.')
+    } catch (error) {
+      setAuthMessage(friendlyAuthMessage(messageFromError(error), 'login'))
+    } finally {
+      setIsAuthBusy(false)
+    }
   }
 
   const handleLogout = async () => {
@@ -581,6 +600,18 @@ function messageFromError(error: unknown) {
 
 function friendlyAuthMessage(message: string, mode: AuthMode) {
   const lowerMessage = message.toLowerCase()
+
+  if (lowerMessage.includes('failed to fetch') || lowerMessage.includes('fetch failed') || lowerMessage.includes('network')) {
+    return 'Network problem. Check your internet connection and try again.'
+  }
+
+  if (lowerMessage.includes('invalid email') || lowerMessage.includes('email address is invalid')) {
+    return 'Enter a valid email address, then try again.'
+  }
+
+  if (lowerMessage.includes('rate limit') || lowerMessage.includes('security purposes') || lowerMessage.includes('too many')) {
+    return 'Too many attempts for now. Wait a little, then try again.'
+  }
 
   if (lowerMessage.includes('invalid login credentials')) {
     return 'Could not log in with those details. Create an account first, confirm your email, or reset your password.'

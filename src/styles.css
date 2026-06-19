@@ -39,13 +39,47 @@ textarea {
   font: inherit;
 }
 
-button {
+button,
+.upload-button {
   cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform 120ms ease,
+    filter 120ms ease,
+    box-shadow 120ms ease,
+    background-color 120ms ease,
+    border-color 120ms ease,
+    color 120ms ease,
+    opacity 120ms ease;
 }
 
 button:disabled {
   cursor: not-allowed;
   opacity: 0.68;
+}
+
+button:not(:disabled):active,
+.upload-button:active {
+  transform: scale(0.975);
+  filter: brightness(1.08);
+}
+
+.round-icon-button:not(:disabled):active,
+.install-dismiss:not(:disabled):active,
+.icon-field-button:not(:disabled):active {
+  transform: scale(0.92);
+}
+
+.action-tile:not(:disabled):active,
+.today-alert-card:not(:disabled):active,
+.status-row-button:not(:disabled):active {
+  transform: scale(0.965);
+}
+
+.bottom-nav button:not(:disabled):active {
+  transform: translateY(1px) scale(0.94);
 }
 
 .app-shell {
@@ -144,7 +178,6 @@ button:disabled {
 .date-line,
 .header-actions,
 .records-pill,
-.setup-card,
 .quick-title,
 .quick-record-row,
 .panel-topline,
@@ -256,34 +289,6 @@ button:disabled {
   box-shadow: inset 0 0 24px rgba(77, 220, 146, 0.05);
 }
 
-.demo-note,
-.setup-card {
-  border: 1px solid rgba(74, 217, 143, 0.18);
-  color: #b7f3ce;
-  background: rgba(74, 217, 143, 0.08);
-}
-
-.demo-note {
-  margin: -0.9rem 0 1rem;
-  padding: 0.75rem 0.9rem;
-  border-radius: 1rem;
-  font-size: 0.78rem;
-  line-height: 1.45;
-}
-
-.setup-card {
-  gap: 0.55rem;
-  margin: -0.65rem 0 1rem;
-  padding: 0.7rem 0.85rem;
-  border-radius: 1rem;
-  font-size: 0.75rem;
-  line-height: 1.45;
-}
-
-.below-fold-card {
-  margin: 0.85rem 0 0;
-}
-
 .pulse-section h2 {
   margin: 0 0 0.82rem;
   color: #fff;
@@ -382,7 +387,6 @@ button:disabled {
 
 .tone-green b,
 .row-value.tone-green,
-.green-link button,
 .green-outline {
   color: #4bd98f;
 }
@@ -394,14 +398,12 @@ button:disabled {
 
 .tone-amber b,
 .row-value.tone-amber,
-.amber-link button,
 .amber-outline {
   color: #ffc14a;
 }
 
 .tone-coral b,
-.row-value.tone-coral,
-.panel-topline button {
+.row-value.tone-coral {
   color: #ff7569;
 }
 
@@ -525,13 +527,6 @@ button:disabled {
     rgba(6, 12, 13, 0.66);
 }
 
-.business-panels {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.85rem;
-  margin-bottom: 0.9rem;
-}
-
 .exact-card {
   border-radius: 1rem;
   padding: 0.95rem;
@@ -544,21 +539,12 @@ button:disabled {
 }
 
 .panel-topline h3,
-.spending-warning h3,
-.recent-sales-card h3 {
+.spending-warning h3 {
   margin: 0;
   color: #fff;
   font-size: 1.02rem;
   letter-spacing: 0;
   font-weight: 900;
-}
-
-.panel-topline button {
-  border: 0;
-  padding: 0;
-  background: transparent;
-  font-weight: 800;
-  white-space: nowrap;
 }
 
 .panel-action-label {
@@ -721,10 +707,6 @@ button:disabled {
   margin: 0;
   color: #b7b9ba;
   font-size: 0.83rem;
-}
-
-.recent-sales-card {
-  padding-bottom: 4rem;
 }
 
 .bottom-nav {
@@ -1721,10 +1703,33 @@ button:disabled {
 }
 
 .auth-message {
-  margin: 0.75rem 0 0;
-  color: #ccefd9;
+  margin: 0 0 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 0.86rem;
+  padding: 0.72rem 0.78rem;
   font-size: 0.78rem;
   line-height: 1.45;
+}
+
+.auth-confirmation-card .auth-message {
+  margin: 0;
+}
+
+.auth-message-info {
+  color: #d7e2e0;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.auth-message-success {
+  border-color: rgba(75, 217, 143, 0.24);
+  color: #c9f8dc;
+  background: rgba(75, 217, 143, 0.11);
+}
+
+.auth-message-error {
+  border-color: rgba(255, 117, 105, 0.28);
+  color: #ffc6c0;
+  background: rgba(255, 117, 105, 0.11);
 }
 
 .install-card {
@@ -2030,6 +2035,30 @@ button:disabled {
   margin-top: 1rem;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  button:not(:disabled):active,
+  .upload-button:active,
+  .round-icon-button:not(:disabled):active,
+  .install-dismiss:not(:disabled):active,
+  .icon-field-button:not(:disabled):active,
+  .action-tile:not(:disabled):active,
+  .today-alert-card:not(:disabled):active,
+  .status-row-button:not(:disabled):active,
+  .bottom-nav button:not(:disabled):active {
+    transform: none;
+    filter: none;
+  }
+}
+
 @media (min-width: 760px) {
   .app-shell {
     padding: 2rem;
@@ -2180,19 +2209,11 @@ button:disabled {
     bottom: calc(max(0.65rem, env(safe-area-inset-bottom)) + 5.75rem);
   }
 
-  .business-panels {
-    grid-template-columns: 1fr;
-  }
-
   .split-fields,
   .evidence-actions,
   .management-grid,
   .detail-actions {
     grid-template-columns: 1fr;
     display: grid;
-  }
-
-  .recent-sales-card {
-    padding-bottom: 4.8rem;
   }
 }
