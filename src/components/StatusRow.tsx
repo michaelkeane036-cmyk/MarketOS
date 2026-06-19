@@ -21,7 +21,7 @@ export default function StatusRow({ title, meta, value, tone, avatar, actionLabe
       </div>
       <div className="row-end">
         <b className={`row-value tone-${tone}`}>{actionLabel ?? value}</b>
-        <ChevronRight size={17} />
+        {onClick && <ChevronRight size={17} />}
       </div>
     </>
   )

@@ -56,6 +56,7 @@ export default function App() {
   const [recordInitialDraft, setRecordInitialDraft] = useState<ReviewEntryDraft | null>(null)
   const [scanDraft, setScanDraft] = useState<ScanDraft | null>(null)
   const [authMessage, setAuthMessage] = useState('')
+  const [confirmationEmail, setConfirmationEmail] = useState('')
   const [isAuthBusy, setIsAuthBusy] = useState(false)
   const [isWorkspaceLoading, setIsWorkspaceLoading] = useState(false)
   const [isSavingRecord, setIsSavingRecord] = useState(false)
@@ -148,9 +149,16 @@ export default function App() {
     setAuthMessage(message)
   }
 
+  const handleAuthModeChange = (mode: AuthMode) => {
+    setAuthMode(mode)
+    setConfirmationEmail('')
+    setAuthMessage('')
+  }
+
   const handleEmailAuth = async (email: string, password: string, name?: string) => {
     setIsAuthBusy(true)
     setAuthMessage('')
+    setConfirmationEmail('')
 
     try {
       const trimmedEmail = email.trim()
@@ -193,10 +201,49 @@ export default function App() {
       }
 
       if (authMode === 'create') {
+        setConfirmationEmail(trimmedEmail)
         setAuthMessage('Account created. Check your email to confirm it, then come back and log in.')
       } else {
         setAuthMessage('Login did not return a session. Confirm your email first, then try again.')
       }
+    } finally {
+      setIsAuthBusy(false)
+    }
+  }
+
+  const handleBackToLogin = () => {
+    setAuthMode('login')
+    setConfirmationEmail('')
+    setAuthMessage('Email confirmed already? Log in with the same details.')
+  }
+
+  const handleEditAuthEmail = () => {
+    setConfirmationEmail('')
+    setAuthMessage('')
+  }
+
+  const handleResendConfirmation = async (email: string) => {
+    const trimmedEmail = email.trim()
+    if (!trimmedEmail) {
+      setAuthMessage('Enter your email first, then resend confirmation.')
+      return
+    }
+
+    setIsAuthBusy(true)
+    setAuthMessage('')
+
+    try {
+      if (!supabase) {
+        setAuthMessage('Demo mode: email confirmation works when Supabase is connected.')
+        return
+      }
+
+      const { error } = await supabase.auth.resend({
+        type: 'signup',
+        email: trimmedEmail
+      })
+
+      setAuthMessage(error ? friendlyAuthMessage(error.message, 'create') : 'Confirmation email sent again. Check your inbox or spam folder.')
     } finally {
       setIsAuthBusy(false)
     }
@@ -405,12 +452,16 @@ export default function App() {
     return (
       <AuthScreen
         authMode={authMode}
+        confirmationEmail={confirmationEmail}
         isBusy={isAuthBusy}
         isPreviewAuth={isPreviewAuth}
         message={authMessage}
+        onBackToLogin={handleBackToLogin}
+        onEditEmail={handleEditAuthEmail}
         onEmailAuth={handleEmailAuth}
-        onModeChange={setAuthMode}
+        onModeChange={handleAuthModeChange}
         onPasswordReset={handlePasswordReset}
+        onResendConfirmation={handleResendConfirmation}
       />
     )
   }

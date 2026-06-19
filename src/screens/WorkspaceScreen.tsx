@@ -150,10 +150,42 @@ export default function WorkspaceScreen({
         setShareMessage('Summary shared.')
         return
       }
-      await navigator.clipboard.writeText(text)
-      setShareMessage('Summary copied for WhatsApp.')
+      await handleCopyText(text, 'Summary copied for WhatsApp.')
     } catch {
       setShareMessage('Could not share automatically. Copy is available in the summary card.')
+    }
+  }
+
+  const handleCopyText = async (text: string, successMessage: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      setShareMessage(successMessage)
+    } catch {
+      setShareMessage('Could not copy automatically. Select the text manually and copy it.')
+    }
+  }
+
+  const handleSendDebtReminders = async () => {
+    const activeDebts = debtRecords.filter((debt) => !debt.isVoid && Math.max(debt.amount - debt.paidAmount, 0) > 0)
+    if (!activeDebts.length) {
+      setShareMessage('No active customer debts to remind.')
+      return
+    }
+
+    const debtLines = activeDebts
+      .map((debt) => `${debt.customerName}: ${formatNaira(Math.max(debt.amount - debt.paidAmount, 0))} outstanding`)
+      .join('\n')
+    const reminderText = `${business.name} debt reminders\n${debtLines}\n\nRecords only. Money stays with your bank/POS/cash drawer.`
+
+    try {
+      if (navigator.share) {
+        await navigator.share({ text: reminderText, title: `${business.name} Debt Reminders` })
+        setShareMessage('Debt reminder summary shared.')
+        return
+      }
+      await handleCopyText(reminderText, 'Debt reminder summary copied.')
+    } catch {
+      setShareMessage('Could not share reminders. Try copying from a customer ledger instead.')
     }
   }
 
@@ -181,8 +213,7 @@ export default function WorkspaceScreen({
                 ledger={selectedLedger}
                 onClose={() => setSelectedCustomerId(null)}
                 onCopyReminder={(message) => {
-                  void navigator.clipboard.writeText(message)
-                  setShareMessage('Reminder copied.')
+                  void handleCopyText(message, 'Reminder copied.')
                 }}
                 onRecordDebt={() => onStartCustomerRecord('debt', selectedLedger.customer.name, selectedLedger.customer.id)}
                 onRecordSale={() => onStartCustomerRecord('sale', selectedLedger.customer.name, selectedLedger.customer.id)}
@@ -257,7 +288,7 @@ export default function WorkspaceScreen({
                 <Plus size={19} />
                 Record Debt
               </button>
-              <button className="upload-button" type="button">
+              <button className="upload-button" type="button" onClick={() => void handleSendDebtReminders()}>
                 <MessageCircle size={18} />
                 Send Reminders
               </button>
@@ -268,8 +299,7 @@ export default function WorkspaceScreen({
                 ledger={selectedLedger}
                 onClose={() => setSelectedCustomerId(null)}
                 onCopyReminder={(message) => {
-                  void navigator.clipboard.writeText(message)
-                  setShareMessage('Reminder copied.')
+                  void handleCopyText(message, 'Reminder copied.')
                 }}
                 onRecordDebt={() => onStartCustomerRecord('debt', selectedLedger.customer.name, selectedLedger.customer.id)}
                 onRecordSale={() => onStartCustomerRecord('sale', selectedLedger.customer.name, selectedLedger.customer.id)}
@@ -448,7 +478,7 @@ function RecordPanel({ actionLabel, children, title }: { actionLabel: string; ch
     <section className="panel-card exact-card workspace-panel">
       <div className="panel-topline">
         <h3>{title}</h3>
-        <button type="button">{actionLabel}</button>
+        <span className="panel-action-label">{actionLabel}</span>
       </div>
       {children}
     </section>

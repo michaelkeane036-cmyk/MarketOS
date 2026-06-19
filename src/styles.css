@@ -561,6 +561,13 @@ button:disabled {
   white-space: nowrap;
 }
 
+.panel-action-label {
+  color: #ffb15d;
+  font-size: 0.86rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
 .status-row {
   gap: 0.62rem;
   min-height: 3.72rem;
@@ -1594,6 +1601,38 @@ button:disabled {
   line-height: 1.45;
 }
 
+.auth-confirmation-card {
+  display: grid;
+  gap: 0.78rem;
+  text-align: left;
+}
+
+.auth-confirmation-card > svg {
+  width: 2.75rem;
+  height: 2.75rem;
+  color: #4bd98f;
+}
+
+.auth-confirmation-card h2 {
+  margin: 0;
+  color: #fff;
+  font-size: 1.45rem;
+  line-height: 1.05;
+  font-weight: 900;
+}
+
+.auth-confirmation-card p {
+  margin: 0;
+  color: #c8cdcc;
+  font-size: 0.82rem;
+  line-height: 1.55;
+}
+
+.auth-confirmation-card strong {
+  color: #fff;
+  overflow-wrap: anywhere;
+}
+
 .field {
   display: grid;
   gap: 0.42rem;
@@ -1675,6 +1714,12 @@ button:disabled {
   background: transparent;
 }
 
+.muted-reset {
+  min-height: 2.35rem;
+  margin-top: 0.1rem;
+  color: #bfc4c3;
+}
+
 .auth-message {
   margin: 0.75rem 0 0;
   color: #ccefd9;
@@ -1683,6 +1728,7 @@ button:disabled {
 }
 
 .install-card {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 0.68rem;
@@ -1733,7 +1779,6 @@ button:disabled {
 }
 
 .install-action,
-.install-hint,
 .install-dismiss {
   display: inline-flex;
   align-items: center;
@@ -1753,13 +1798,6 @@ button:disabled {
   font-weight: 900;
 }
 
-.install-hint {
-  gap: 0.28rem;
-  color: #8ff0b8;
-  font-size: 0.72rem;
-  font-weight: 850;
-}
-
 .install-dismiss {
   width: 2rem;
   height: 2rem;
@@ -1767,6 +1805,66 @@ button:disabled {
   border-radius: 50%;
   color: #aeb3b3;
   background: rgba(255, 255, 255, 0.055);
+}
+
+.install-help-button {
+  color: #07150d;
+}
+
+.install-help-sheet {
+  position: fixed;
+  z-index: 60;
+  inset: 0;
+  display: grid;
+  place-items: end center;
+  padding: 1rem;
+  background: rgba(0, 0, 0, 0.58);
+  backdrop-filter: blur(10px);
+}
+
+.install-help-card {
+  position: relative;
+  width: min(100%, 398px);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 1.2rem;
+  display: grid;
+  gap: 0.85rem;
+  padding: 1rem;
+  color: #f8f8f5;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.035)),
+    rgba(4, 9, 10, 0.96);
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.45);
+}
+
+.install-help-card .install-dismiss {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+}
+
+.install-help-card h2 {
+  max-width: 16rem;
+  margin: 0;
+  color: #fff;
+  font-size: 1.25rem;
+  line-height: 1.08;
+  font-weight: 900;
+}
+
+.install-help-card ol {
+  margin: 0;
+  padding-left: 1.25rem;
+  color: #d6dad8;
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.install-help-card p {
+  margin: 0;
+  color: #b7f3ce;
+  font-size: 0.78rem;
+  line-height: 1.45;
 }
 
 .install-card-floating {
@@ -1788,8 +1886,7 @@ button:disabled {
   height: 2.1rem;
 }
 
-.install-card-floating .install-copy p,
-.install-card-floating .install-hint {
+.install-card-floating .install-copy p {
   display: none;
 }
 

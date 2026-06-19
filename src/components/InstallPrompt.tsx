@@ -16,6 +16,7 @@ export default function InstallPrompt({ surface = 'card' }: InstallPromptProps) 
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null)
   const [dismissed, setDismissed] = useState(() => readDismissedState())
   const [installed, setInstalled] = useState(() => isStandaloneMode())
+  const [showHelp, setShowHelp] = useState(false)
 
   const device = useMemo(() => getDeviceInstallContext(), [])
   const canShow = !dismissed && !installed && (installEvent || device.isIos || device.isAndroid)
@@ -71,14 +72,33 @@ export default function InstallPrompt({ surface = 'card' }: InstallPromptProps) 
           Install
         </button>
       ) : (
-        <span className="install-hint">
+        <button className="install-action install-help-button" type="button" onClick={() => setShowHelp(true)}>
           <Share size={15} />
-          Add
-        </span>
+          How
+        </button>
       )}
       <button className="install-dismiss" type="button" aria-label="Dismiss install prompt" onClick={dismiss}>
         <X size={15} />
       </button>
+      {showHelp && (
+        <div className="install-help-sheet" role="dialog" aria-label="How to install MarketOS">
+          <div className="install-help-card">
+            <button className="install-dismiss" type="button" aria-label="Close install instructions" onClick={() => setShowHelp(false)}>
+              <X size={15} />
+            </button>
+            <div className="install-icon">
+              <Smartphone size={20} />
+            </div>
+            <h2>Add MarketOS to your home screen</h2>
+            <ol>
+              {device.steps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ol>
+            <p>Once added, open MarketOS from the phone icon just like a normal app.</p>
+          </div>
+        </div>
+      )}
     </section>
   )
 }
@@ -113,13 +133,15 @@ function getDeviceInstallContext() {
     return {
       isAndroid,
       isIos,
-      instructions: 'Tap Share, then Add to Home Screen.'
+      instructions: 'Tap Share, then Add to Home Screen.',
+      steps: ['Tap the Share button in Safari.', 'Choose Add to Home Screen.', 'Tap Add to save the MarketOS icon.']
     }
   }
 
   return {
     isAndroid,
     isIos,
-    instructions: 'Use your browser menu, then Add to Home screen.'
+    instructions: 'Use your browser menu, then Add to Home screen.',
+    steps: ['Open the browser menu.', 'Choose Install app or Add to Home screen.', 'Confirm to save the MarketOS icon.']
   }
 }
